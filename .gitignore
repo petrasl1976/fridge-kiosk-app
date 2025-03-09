@@ -1,0 +1,7 @@
+my_secrets.py
+client_secret.json
+token.json
+albums_cache.json
+log.log
+__pycache__/
+venv/

@@ -1,0 +1,21 @@
+{% if events %}
+  {% for event in events %}
+    {% set bg_color = event.summary|event_color %}
+    {% if event.start.dateTime %}
+      {% set dt_start = event.start.dateTime|replace("T"," ")|replace("Z","") %}
+      {% set start_time = dt_start[11:16] %}
+      <div style="background: {{ bg_color }}; color: {{ '#000' if bg_color == '#FFFFFF' else '#fff' }};
+                  padding: 4px; border-radius: 3px; margin-bottom: 4px;">
+        {{ start_time }} {{ event.summary|truncate(summary_max_length, True, '...') }}
+      </div>
+    {% else %}
+      <div style="background: {{ bg_color }}; color: {{ '#000' if bg_color == '#FFFFFF' else '#fff' }};
+                  padding: 4px; border-radius: 3px; margin-bottom: 4px;">
+        {{ event.summary|truncate(summary_max_length, True, '...') }}
+      </div>
+    {% endif %}
+  {% endfor %}
+{% else %}
+  <div>No events today.</div>
+{% endif %}
+

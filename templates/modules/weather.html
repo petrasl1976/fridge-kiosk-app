@@ -1,0 +1,35 @@
+{% if weather and weather.daily %}
+<div id="weather-overlay" style="
+  position: absolute;
+  top: {{ weather_overlay.top }};
+  left: {{ weather_overlay.left }};
+  width: {{ weather_overlay.width }};
+  height: {{ weather_overlay.height }};
+  z-index: {{ weather_overlay.z_index }};
+  font-size: {{ weather_overlay.font_size }};
+  color: {{ weather_overlay.color }};
+  padding: {{ weather_overlay.padding }};
+  background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 100%);
+  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  overflow-x: auto;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+">
+  {% for day in weather.daily %}
+    {% set dt = day.dt|int|datetime_fromtimestamp %}
+    <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.3); padding: 0 10px;">
+      <div style="font-size: 1em; font-weight: bold; margin-bottom: 0px;">
+        {{ dt.strftime("%a") }}
+      </div>
+      <div>
+        <img src="/static/meteo-icons/day/{{ day.weather[0].description }}.png"
+             alt="{{ day.weather[0].description }}"
+             style="width: 60px; height: 60px;" />
+      </div>
+      <div style="font-size: 1.2em;">
+        {{ day.main.temp_min|round }}° / {{ day.main.temp_max|round }}°
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+

@@ -1,0 +1,29 @@
+<!-- modules/calendar.html -->
+<!-- 
+     Šis DIV ištempiamas nuo top: 60% iki bottom: 0; 
+     Taip jis užima visą ekrano dalį žemiau 60%.
+     display: flex; flex-direction: column; kad vaikai galėtų išsitempti. 
+-->
+<div id="calendar-container" style="
+  position: absolute;
+  top: 60%;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: {{ calendar_container.background }};
+  font-size: {{ calendar_container.font_size }};
+  z-index: {{ calendar_container.z_index }};
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+">
+
+  <!-- Vidinis div su flex:1; kad viduje būtų slankiojimas, jei reikia. 
+       Galite keisti overflow į 'auto', 'hidden' ar 'scroll' priklausomai nuo poreikių.
+  -->
+  <div style="flex: 1; overflow: auto;">
+    {% include 'calendar_fragment.html' %}
+  </div>
+
+</div>

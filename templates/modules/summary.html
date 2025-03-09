@@ -1,0 +1,78 @@
+<div id="status-overlay" style="
+  position: absolute;
+  top: {{ status_overlay.top }};
+  left: {{ status_overlay.left }};
+  width: {{ status_overlay.width }};
+  height: {{ status_overlay.height }};
+  z-index: {{ status_overlay.z_index }};
+  background: {{ status_overlay.background }};
+  color: {{ status_overlay.color }};
+  padding: {{ status_overlay.padding }};
+">
+  <div id="big-clock" style="
+    font-size: {{ status_overlay.clock_font_size }};
+    text-shadow: 2px 2px 4px rgba(0,0,0,1);
+  "></div>
+  <div id="date" style="
+    font-size: {{ status_overlay.date_font_size }};
+    text-shadow: 2px 2px 4px rgba(0,0,0,1);
+  "></div>
+  <div id="sensor-data" style="
+    font-size: {{ status_overlay.sensor_font_size }};
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,1);
+  ">Loading sensor...</div>
+
+  <hr style="border: 1px solid white;">
+
+  <!-- Šiandienos įvykiai -->
+  <div id="today-events" style="
+    font-size: {{ status_overlay.events_font_size }};
+    text-shadow: 2px 2px 4px rgba(0,0,0,1);
+  ">
+    {% set today_str = today|strftime("%Y-%m-%d") %}
+    {% if events_by_day[today_str] %}
+      {% for event in events_by_day[today_str] %}
+        {% set bg_color = event.summary|event_color %}
+        <div style="background: {{ bg_color }}; color: {{ '#000' if bg_color == '#FFFFFF' else '#fff' }}; padding:4px; border-radius:3px; margin-bottom:4px;">
+          {% if event.start.dateTime %}
+            {% set dt_start = event.start.dateTime|replace("T"," ")|replace("Z","") %}
+            {% set start_time = dt_start[11:16] %}
+            {{ start_time }} {{ event.summary }}
+          {% else %}
+            {{ event.summary }}
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div>No events today.</div>
+    {% endif %}
+  </div>
+
+  <hr style="border: 1px solid white;">
+
+  <!-- Rytdienos įvykiai -->
+  <div id="tomorrow-events" style="
+    font-size: {{ status_overlay.events_font_size }};
+    text-shadow: 2px 2px 4px rgba(0,0,0,1);
+  ">
+    {% set tomorrow_str = tomorrow|strftime("%Y-%m-%d") %}
+    {% if events_by_day[tomorrow_str] %}
+      {% for event in events_by_day[tomorrow_str] %}
+        {% set bg_color = event.summary|event_color %}
+        <div style="background: {{ bg_color }}; color: {{ '#000' if bg_color == '#FFFFFF' else '#fff' }}; padding:4px; border-radius:3px; margin-bottom:4px;">
+          {% if event.start.dateTime %}
+            {% set dt_start = event.start.dateTime|replace("T"," ")|replace("Z","") %}
+            {% set start_time = dt_start[11:16] %}
+            {{ start_time }} {{ event.summary }}
+          {% else %}
+            {{ event.summary }}
+          {% endif %}
+        </div>
+      {% endfor %}
+    {% else %}
+      <div>No events tomorrow.</div>
+    {% endif %}
+  </div>
+</div>
+

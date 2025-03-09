@@ -1,0 +1,59 @@
+<table>
+  <thead>
+    <tr>
+      <th>Pir</th>
+      <th>Ant</th>
+      <th>Tre</th>
+      <th>Ket</th>
+      <th>Pen</th>
+      <th>Šes</th>
+      <th>Sek</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for week in weeks %}
+      <tr>
+        {% for day in week %}
+          {% if day %}
+            {% set day_str = day|strftime("%Y-%m-%d") %}
+            {% if day == today %}
+              {% set cell_bg = "rgba(0,128,0,0.7)" %}
+              {% set text_color = "white" %}
+            {% else %}
+              {% set cell_bg = "black" %}
+              {% set text_color = "lightgray" %}
+              {% if show_holidays and day_str in holidays %}
+                {% set text_color = "#f88" %}
+              {% elif day.weekday() in [5,6] %}
+                {% set text_color = "lightgreen" %}
+              {% endif %}
+            {% endif %}
+            <td style="background: {{ cell_bg }}; color: {{ text_color }}; vertical-align: top;">
+              <div style="font-size:1em;">{{ day.day }}</div>
+              {% if show_holidays and day_str in holidays %}
+                <div style="font-size:0.8em; font-weight:bold;">{{ holidays[day_str] }}</div>
+              {% endif %}
+              <div class="events">
+                <ul>
+                  {% for event in events_by_day[day_str] %}
+                    {% set truncated_summary = event.summary|truncate(summary_max_length, True, '...') %}
+                    {% if event.start.dateTime %}
+                      {% set dt = event.start.dateTime|replace("T"," ")|replace("Z","") %}
+                      {% set time_str = dt[11:16] %}
+                      <li>{{ time_str }} {{ truncated_summary }}</li>
+                    {% else %}
+                      <li>{{ truncated_summary }}</li>
+                    {% endif %}
+                  {% endfor %}
+                </ul>
+              </div>
+            </td>
+          {% else %}
+            <td style="background: black;"></td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+

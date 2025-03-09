@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fridge</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: #000; color: #fff;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    .screen-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    /* Čia galite dėti bendrus stilius, kuriuos naudos visi šablonai */
+  </style>
+</head>
+<body>
+  <div class="screen-container">
+    {% block content %}{% endblock %}
+  </div>
+
+  <!-- Pagrindinis JS failas (pasirinktinai) -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
+

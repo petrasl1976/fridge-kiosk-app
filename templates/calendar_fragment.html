@@ -1,0 +1,120 @@
+<!-- calendar_fragment.html -->
+<style>
+  /* Lentelės stilius, kad stulpeliai būtų vienodo pločio,
+     o pati lentelė bandytų užimti 100% aukščio tėvo. */
+  .calendar-table {
+    width: 100%;
+    height: 100%;
+    border-collapse: collapse;
+    table-layout: fixed; /* vienodas stulpelių plotis */
+  }
+  .calendar-table thead th {
+    background: #222;
+    color: #fff;
+    text-align: center;
+    font-size: 1.1em;
+    padding: 5px;
+    border: 1px solid #444;
+  }
+  .calendar-table td {
+    border: 1px solid #444;
+    vertical-align: top;
+    padding: 6px;
+    box-sizing: border-box;
+  }
+  .day-header {
+    text-align: right;
+    font-size: 1em;
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+  .holiday {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #f88;
+  }
+  .events ul {
+    list-style: none;
+    margin: 0; padding: 0;
+  }
+  .events li {
+    margin: 2px 0;
+    padding: 3px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    text-shadow: 2px 2px 4px rgba(0,0,0,1);
+  }
+</style>
+
+{% set row_count = weeks|length %}
+<!-- 
+     row_count = kiek iš tikrųjų turime savaičių. 
+     Jei 5, bus 5 eilučių, jei 6 – 6. 
+     Kad užimtų visą aukštį, kiekvienai eilei priskirsime: height: calc(100% / row_count).
+-->
+
+<table class="calendar-table">
+  <thead>
+    <tr>
+      <th>Pir</th>
+      <th>Ant</th>
+      <th>Tre</th>
+      <th>Ket</th>
+      <th>Pen</th>
+      <th>Šes</th>
+      <th>Sek</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for week in weeks %}
+      <!-- Kiekviena eilė išsitemps pagal row_count, 
+           kad visos eilės kartu sudarytų 100% aukščio. -->
+      <tr style="height: calc(100% / {{ row_count }});">
+        {% for day in week %}
+          {% if day %}
+            {% set day_str = day|strftime("%Y-%m-%d") %}
+            {% if day == today %}
+              {% set cell_bg = "rgba(0,128,0,0.7)" %}
+              {% set text_color = "white" %}
+            {% else %}
+              {% set cell_bg = "black" %}
+              {% set text_color = "lightgray" %}
+              {% if show_holidays and day_str in holidays %}
+                {% set text_color = "#f88" %}
+              {% elif day.weekday() in [5,6] %}
+                {% set text_color = "lightgreen" %}
+              {% endif %}
+            {% endif %}
+            <td style="background: {{ cell_bg }}; color: {{ text_color }};">
+              <div class="day-header">{{ day.day }}</div>
+              {% if show_holidays and day_str in holidays %}
+                <div class="holiday">{{ holidays[day_str] }}</div>
+              {% endif %}
+              <div class="events">
+                <ul>
+                  {% for event in events_by_day[day_str] %}
+                    {% set truncated_summary = event.summary|truncate(summary_max_length, True, '...') %}
+                    {% set bg_color = event.summary|event_color %}
+                    <li style="background: {{ bg_color }}; color: {{ '#000' if bg_color == '#FFFFFF' else '#fff' }};">
+                      {% if event.start.dateTime %}
+                        {% set dt = event.start.dateTime|replace("T"," ")|replace("Z","") %}
+                        {% set time_str = dt[11:16] %}
+                        {{ time_str }} {{ truncated_summary }}
+                      {% else %}
+                        {{ truncated_summary }}
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </td>
+          {% else %}
+            <!-- Jei savaitėje mažiau nei 7 dienos -->
+            <td style="background: black;"></td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+

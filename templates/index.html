@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <!-- Perduodame reikšmes į JS (main.js) -->
+  <script>
+    window.PHOTO_DURATION = {{ photo_duration }};
+    window.PHOTO_BATCH = {{ photo_batch|tojson }};
+    window.ALBUM_TITLE = "{{ album_title }}";
+    window.WEATHER_REFRESH_INTERVAL = {{ weather_refresh_interval }};
+  </script>
+
+  {# Atskiri moduliai (išskaidyti šablonai) #}
+  {% include "modules/photo.html" %}
+  {% include "modules/weather.html" %}
+  {% include "modules/discord.html" %}
+  {% include "modules/calendar.html" %}
+  {% include "modules/summary.html" %}
+{% endblock %}
+

@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Fridge</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      background: #000; color: #fff;
+      font-family: sans-serif; overflow: hidden;
+    }
+    .screen-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    html { font-size: 2.2vh; }
+    @media (orientation: portrait) { html { font-size: 2.2vw; } }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    th, td {
+      text-align: left;
+      border: 1px solid #444;
+      vertical-align: top;
+      padding: 5px;
+      background: black;
+    }
+    thead th {
+      background: #222;
+      color: #fff;
+      text-align: center;
+      font-size: 1.2em;
+    }
+    .events { margin: 3px 0; font-size: 1em; }
+    .events ul { margin: 0; padding: 0; }
+    .events li {
+      list-style: none;
+      text-align: left;
+      margin: 0;
+      padding: 4px;
+      background: rgba(255,255,0,0.5);
+      border-radius: 3px;
+    }
+
+    #photo-progress {
+      position: absolute;
+      bottom: 0; 
+      left: 0;
+      height: 3px; 
+      width: 66%;
+      background: rgba(255,255,255,0.5);
+      transition: width 0.5s linear; 
+      z-index: 1000;
+    }
+
+    /* Nuotraukų konteineris – turi aiškų dydį */
+    #photo-display {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      overflow: hidden; /* kad, jei paveikslėlis didesnis, jis būtų "nukirptas" */
+    }
+
+    /* Pradiniai stiliai nuotraukai */
+    #current-photo {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      margin: 0;
+      object-fit: contain; /* kad nepersikreiptų */
+    }
+
+    /* BENDRAS overlay: sensoriai, laikrodis, data, šiandienos event'ai */
+    #status-overlay {
+      position: absolute;
+      top: {{ status_overlay.top }};
+      left: {{ status_overlay.left }};
+      width: {{ status_overlay.width }};
+      height: {{ status_overlay.height }};
+      z-index: {{ status_overlay.z_index }};
+      background: {{ status_overlay.background }};
+      color: {{ status_overlay.color }};
+      padding: {{ status_overlay.padding }};
+    }
+    #sensor-data {
+      font-size: {{ status_overlay.sensor_font_size }};
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+      margin-bottom: 10px;
+    }
+    #big-clock {
+      font-size: {{ status_overlay.clock_font_size }};
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+    }
+    #date {
+      font-size: {{ status_overlay.date_font_size }};
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+    }
+    #today-events {
+      font-size: {{ status_overlay.events_font_size }};
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+      margin-top: 10px;
+    }
+
+    /* Overlay albumo pavadinimui ir nuotraukos timestampui */
+    #photo-info-overlay {
+      position: absolute;
+      top: {{ photo_info_overlay.top }};
+      left: {{ photo_info_overlay.left }};
+      width: {{ photo_info_overlay.width }};
+      height: {{ photo_info_overlay.height }};
+      z-index: {{ photo_info_overlay.z_index }};
+      background: {{ photo_info_overlay.background }};
+      color: {{ photo_info_overlay.color }};
+      padding: {{ photo_info_overlay.padding }};
+      font-size: {{ photo_info_overlay.font_size }};
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+    }
+
+    /* Paslėpti scroll bar #discord-overlay (bet dabar leisime scroll) */
+    #discord-overlay {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    #discord-overlay::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="screen-container">
+
+    <!-- Discord overlay (pvz.) -->
+    <div id="discord-overlay" style="
+         text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+         position: absolute;
+         top: {{ discord_overlay.top }};
+         left: {{ discord_overlay.left }};
+         width: {{ discord_overlay.width }};
+         max-height: 30%;
+         overflow: auto;
+         background: {{ discord_overlay.background }};
+         z-index: {{ discord_overlay.z_index }};
+         padding: {{ discord_overlay.padding }};
+         font-size: {{ discord_overlay.font_size }};
+         color: {{ discord_overlay.color }};
+    ">
+      Loading Discord messages...
+    </div>
+
+    <!-- Nuotraukų konteineris -->
+    <div style="
+         position: absolute;
+         top: {{ photo_container.top }};
+         left: {{ photo_container.left }};
+         width: {{ photo_container.width }};
+         height: {{ photo_container.height }};
+         z-index: {{ photo_container.z_index }};
+         background: {{ photo_container.background }};
+         display: flex; 
+         justify-content: center; 
+         align-items: center;
+         font-size: {{ photo_container.font_size }};
+    ">
+      <div id="photo-display"></div>
+    </div>
+
+    <!-- Albumo pavadinimo ir timestamp overlay -->
+    <div id="photo-info-overlay">
+      <div id="photo-overlay-content"></div>
+      <div id="photo-progress"></div>
+    </div>
+
+    <!-- Orai overlay (kaip buvę) -->
+    {% if weather and weather.daily %}
+    <div id="weather-overlay" style="
+         position: absolute;
+         top: {{ weather_overlay.top }};
+         left: {{ weather_overlay.left }};
+         width: {{ weather_overlay.width }};
+         height: {{ weather_overlay.height }};
+         color: {{ weather_overlay.color }};
+         padding: {{ weather_overlay.padding }};
+         font-size: {{ weather_overlay.font_size }};
+         z-index: {{ weather_overlay.z_index }};
+         display: flex; 
+         flex-direction: row;
+         align-items: center; 
+         justify-content: center;
+         gap: 10px; 
+         overflow-x: auto;
+         background: linear-gradient(0deg, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 100%);
+         text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);
+    ">
+      {% for day in weather.daily %}
+        {% set dt = day.dt|int|datetime_fromtimestamp %}
+        <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.3); padding: 0 10px;">
+          <div style="font-size: 1em; font-weight: bold; margin-bottom: 0px; text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);">
+            {{ dt.strftime("%a") }}
+          </div>
+          <div>
+            <img src="/static/meteo-icons/day/{{ day.weather[0].description }}.png"
+                 alt="{{ day.weather[0].description }}"
+                 style="width: 60px; height: 60px;" />
+          </div>
+          <div style="font-size: 1.2em; text-shadow: 2px 2px 4px rgba(0, 0, 0, 1);">
+            {{ day.main.temp_min|round }}° / {{ day.main.temp_max|round }}°
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Kalendoriaus konteineris -->
+    <div id="calendar-container" style="
+         position: absolute;
+         top: {{ calendar_container.top }};
+         left: {{ calendar_container.left }};
+         width: {{ calendar_container.width }};
+         height: {{ calendar_container.height }};
+         z-index: {{ calendar_container.z_index }};
+         overflow: auto; 
+         background: {{ calendar_container.background }};
+         font-size: {{ calendar_container.font_size }};
+    ">
+      {% include 'calendar_fragment.html' %}
+    </div>
+
+    <!-- BENDRAS overlay: sensoriai, laikrodis, data, šiandienos event'ai -->
+    <div id="status-overlay">
+      <div id="big-clock"></div>
+      <div id="date"></div>
+      <div id="sensor-data">Loading sensor...</div>
+      <hr style="border: 1px solid white;">
+      <div id="today-events">
+        {% set today_str = today|strftime("%Y-%m-%d") %}
+        {% if events_by_day[today_str] %}
+          {% for event in events_by_day[today_str] %}
+            {% if event.start.dateTime %}
+              {% set dt_start = event.start.dateTime|replace("T"," ")|replace("Z","") %}
+              {% set start_time = dt_start[11:16] %}
+              <div>{{ start_time }} {{ event.summary }}</div>
+            {% else %}
+              <div>{{ event.summary }}</div>
+            {% endif %}
+          {% endfor %}
+        {% else %}
+          <div>No events today.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PHOTO_DURATION = {{ photo_duration }};
+    let currentBatch = {{ photo_batch|tojson }};
+    let currentIndex = 0;
+    let currentAlbum = "{{ album_title }}";
+
+    function startProgressBar() {
+      let timePassed = 0;
+      const intervalId = setInterval(() => {
+        timePassed++;
+        const percentLeft = 66 - (timePassed / PHOTO_DURATION) * 100;
+        document.getElementById('photo-progress').style.width = percentLeft + '%';
+        if (timePassed >= PHOTO_DURATION) {
+          clearInterval(intervalId);
+          nextMedia();
+        }
+      }, 1000);
+    }
+
+    function nextMedia() {
+      if (currentBatch && currentIndex < currentBatch.length - 1) {
+        currentIndex++;
+        showMedia(currentBatch[currentIndex]);
+        startProgressBar();
+      } else {
+        updatePhotoBatch();
+      }
+    }
+
+    // Rodo vieną paveikslėlį, atsižvelgiant į orientaciją
+    function showMedia(m) {
+      const display = document.getElementById('photo-display');
+      display.innerHTML = '';
+
+      let imgEl = document.createElement('img');
+      imgEl.id = 'current-photo';
+      imgEl.src = m.baseUrl + "=w1200-h800";
+      imgEl.style.position = 'absolute';
+      imgEl.style.left = '50%';
+      imgEl.style.transform = 'translateX(-50%)';
+      imgEl.style.objectFit = 'contain';
+      imgEl.style.margin = 0;
+
+      // Kai paveikslėlis užsikrauna, tikriname matmenis
+      imgEl.onload = function() {
+        let w = imgEl.naturalWidth;
+        let h = imgEl.naturalHeight;
+        if (h > w) {
+          // Portretinė: užpildome aukštį
+          imgEl.style.height = '100%';
+          imgEl.style.width = 'auto';
+          imgEl.style.top = '0';
+          imgEl.style.bottom = '0';
+        } else {
+          // Horizontali: užpildome plotį, prilipdome prie apačios
+          imgEl.style.width = '100%';
+          imgEl.style.height = 'auto';
+          imgEl.style.bottom = '0';
+          imgEl.style.top = 'auto';
+        }
+      };
+
+      display.appendChild(imgEl);
+
+      let remain = currentBatch.length - currentIndex;
+      let overlayText = currentAlbum + "<br>" + m.photo_time.replace("T", " ").replace("Z", "")
+                        + ` #${remain}`;
+      document.getElementById('photo-overlay-content').innerHTML = overlayText;
+    }
+
+    function updatePhotoBatch() {
+      fetch('/newphoto')
+        .then(r => r.json())
+        .then(d => {
+          if (d.error) {
+            console.error("Error:", d.error);
+            return;
+          }
+          currentBatch = d.photos;
+          currentAlbum = d.album_title;
+          currentIndex = 0;
+          showMedia(currentBatch[0]);
+          startProgressBar();
+        })
+        .catch(e => console.error('Error fetching new photo batch:', e));
+    }
+
+    if (currentBatch && currentBatch.length > 0) {
+      showMedia(currentBatch[0]);
+      startProgressBar();
+    }
+
+    // Atnaujiname kalendorių kas minutę
+    setInterval(() => {
+      fetch('/calendarevents')
+        .then(r => r.text())
+        .then(html => {
+          document.getElementById('calendar-container').innerHTML = html;
+        })
+        .catch(e => console.error('Error fetching calendar events:', e));
+    }, 60000);
+
+    // Atnaujiname orus kas valandą
+    const WEATHER_REFRESH_INTERVAL = {{ weather_refresh_interval }};
+    setInterval(() => {
+      fetch('/newweather')
+        .then(r => r.json())
+        .then(d => {
+          if(d.error) {
+            console.error("Weather refresh error:", d.error);
+            return;
+          }
+          let overlay = document.getElementById('weather-overlay');
+          let html = "";
+          d.daily.forEach(day => {
+            let dt = new Date(day.dt * 1000);
+            let weekday = dt.toLocaleString('en-US', { weekday: 'short' });
+            let code = day.weather[0].description;
+            let tempMin = Math.round(day.main.temp_min);
+            let tempMax = Math.round(day.main.temp_max);
+            let iconUrl = `/static/meteo-icons/day/${code}.png`;
+            html += `
+            <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.3); padding: 0 10px;">
+              <div style="font-size: 1em; font-weight: bold; margin-bottom: 0px;">${weekday}</div>
+              <div><img src="${iconUrl}" alt="${code}" style="width: 60px; height: 60px;" /></div>
+              <div style="font-size: 1.2em;">${tempMin}° / ${tempMax}°</div>
+            </div>`;
+          });
+          overlay.innerHTML = html;
+        })
+        .catch(e => console.error("Error refreshing weather:", e));
+    }, WEATHER_REFRESH_INTERVAL * 1000);
+
+    // Sukuriame funkciją, kad kiekvienas login'as gautų pastovią spalvą
+    function getColorForUsername(username) {
+      let hash = 0;
+      for (let i = 0; i < username.length; i++) {
+        hash = username.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      let color = '#';
+      for (let i = 0; i < 3; i++) {
+        let value = (hash >> (i * 8)) & 0xFF;
+        color += ('00' + value.toString(16)).substr(-2);
+      }
+      return color;
+    }
+
+    // Atnaujiname Discord žinutes kas minutę su 6 val. filtro sąlyga
+    function updateDiscordMessages() {
+      fetch('/discordmessages')
+        .then(r => r.json())
+        .then(d => {
+          let html = "";
+          const sixHoursAgo = Date.now() - 6 * 3600 * 1000;
+          const recentMessages = d.filter(msg => new Date(msg.timestamp) >= sixHoursAgo);
+
+          if (recentMessages.length > 0) {
+            const lastMessages = recentMessages.slice(0, 10).reverse();
+            lastMessages.forEach(msg => {
+              const msgTime = new Date(msg.timestamp);
+              const hh = String(msgTime.getUTCHours()).padStart(2, '0');
+              const mm = String(msgTime.getUTCMinutes()).padStart(2, '0');
+              const shortUsername = msg.author.username.substring(0, 2);
+              const usernameColor = getColorForUsername(msg.author.username);
+              html += `
+                <div style="margin-bottom: 10px; font-size: 1em;">
+                  ${hh}:${mm} <strong style="color: ${usernameColor};">${shortUsername}</strong>: ${msg.content}
+                </div>
+              `;
+            });
+          } else {
+            html = "<div>No new messages in channel</div>";
+          }
+          document.getElementById('discord-overlay').innerHTML = html;
+        })
+        .catch(e => {
+          console.error("Error fetching Discord messages:", e);
+          document.getElementById('discord-overlay').innerHTML = "Error loading messages.";
+        });
+    }
+    updateDiscordMessages();
+    setInterval(updateDiscordMessages, 60000);
+
+    // Nauja funkcija atnaujinti šiandienos eventų sąrašą kas minutę
+    function updateTodayEvents() {
+      fetch('/todayevents')
+        .then(response => response.text())
+        .then(html => {
+          document.getElementById('today-events').innerHTML = html;
+        })
+        .catch(e => console.error("Error updating today's events:", e));
+    }
+    setInterval(updateTodayEvents, 60000);
+
+    // Laikrodis ir data
+    function updateSchedule() {
+      let now = new Date();
+      let hh = String(now.getHours()).padStart(2,'0');
+      let mm = String(now.getMinutes()).padStart(2,'0');
+      document.getElementById('big-clock').innerText = hh + ":" + mm;
+
+      let yyyy = now.getFullYear();
+      let M = String(now.getMonth() + 1).padStart(2, '0');
+      let d = String(now.getDate()).padStart(2, '0');
+      document.getElementById('date').innerText = yyyy + "." + M + "." + d;
+    }
+    setInterval(updateSchedule, 1000);
+    updateSchedule();
+
+    // Atnaujiname sensorų duomenis kas minutę (rašome į #sensor-data)
+    function updateSensorOverlay() {
+      fetch('/newsensors')
+        .then(r => r.json())
+        .then(d => {
+          let sensorDiv = document.getElementById('sensor-data');
+          if (d.error) {
+            sensorDiv.innerText = "Sensors error: " + d.error;
+          } else {
+            sensorDiv.innerText = `${d.temperature}°C - ${d.humidity}%`;
+          }
+        })
+        .catch(e => {
+          console.error("Error fetching sensor data:", e);
+          document.getElementById('sensor-data').innerText = "Sensor error";
+        });
+    }
+    updateSensorOverlay();
+    setInterval(updateSensorOverlay, 60000);
+  </script>
+</body>
+</html>
+
