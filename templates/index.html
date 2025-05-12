@@ -4,9 +4,20 @@
   <!-- Perduodame reikšmes į JS (main.js) -->
   <script>
     window.PHOTO_DURATION = {{ photo_duration }};
+    window.VIDEO_DURATION = {{ video_duration }};
+    window.MEDIA_TYPES = "{{ media_types }}";
+    window.VIDEO_SOUND = {{ video_sound|lower }};
     window.PHOTO_BATCH = {{ photo_batch|tojson }};
     window.ALBUM_TITLE = "{{ album_title }}";
     window.WEATHER_REFRESH_INTERVAL = {{ weather_refresh_interval }};
+    // Pridedame temperatūros stebėjimo nustatymus
+    window.TEMP_CONFIG = {
+        monitoring: {{ 'true' if config.TEMP_MONITORING else 'false' }},
+        warning: {{ config.TEMP_WARNING }},
+        critical: {{ config.TEMP_CRITICAL }},
+        recovery: {{ config.TEMP_RECOVERY }},
+        checkInterval: {{ config.TEMP_CHECK_INTERVAL }}
+    };
   </script>
 
   {# Atskiri moduliai (išskaidyti šablonai) #}
@@ -15,5 +26,6 @@
   {% include "modules/discord.html" %}
   {% include "modules/calendar.html" %}
   {% include "modules/summary.html" %}
+  {% include "modules/voice.html" %}
 {% endblock %}
 

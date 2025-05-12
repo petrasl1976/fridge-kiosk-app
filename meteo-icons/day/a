@@ -1,0 +1,57 @@
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/giedra.png
+mv giedra.png clear.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/mazai-debesuota.png
+mv mazai-debesuota.png partly-cloudy.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/debesuota-su-pragiedruliais.png
+mv debesuota-su-pragiedruliais.png cloudy-with-sunny-intervals.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/debesuota.png
+mv debesuota.png cloudy.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/nedidelis-lietus.png
+mv nedidelis-lietus.png light-rain.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/lietus.png
+mv lietus.png rain.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/smarkus-lietus.png
+mv smarkus-lietus.png heavy-rain.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/perkuniya.png
+mv perkuniya.png thunder.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/trumpas-lietus-su-perkuniya.png
+mv trumpas-lietus-su-perkuniya.png isolated-thunderstorms.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/lietus-su-perkuniya.png
+mv lietus-su-perkuniya.png thunderstorms.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/smarkus-lietus-su-perkuniya.png
+mv smarkus-lietus-su-perkuniya.png heavy-rain-with-thunderstorms.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/nedidele-slapdriba.png
+mv nedidele-slapdriba.png light-sleet.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/slapdriba.png
+mv slapdriba.png sleet.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/lijundra.png
+mv lijundra.png freezing-rain.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/kruša.png
+mv kruša.png hail.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/nedidelis-sniegas.png
+mv nedidelis-sniegas.png light-snow.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/sniegas.png
+mv sniegas.png snow.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/smarkus-sniegas.png
+mv smarkus-sniegas.png heavy-snow.png
+
+curl -O https://www.meteo.lt/app/mu-plugins/Meteo/assets/img/icons/day/rukas.png
+mv rukas.png fog.png
+

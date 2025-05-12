@@ -16,7 +16,7 @@
 ">
   {% for day in weather.daily %}
     {% set dt = day.dt|int|datetime_fromtimestamp %}
-    <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.3); padding: 0 10px;">
+    <div style="text-align: center; border-right: 1px solid rgba(255,255,255,0.3); padding: 0 0px;">
       <div style="font-size: 1em; font-weight: bold; margin-bottom: 0px;">
         {{ dt.strftime("%a") }}
       </div>
@@ -26,7 +26,7 @@
              style="width: 60px; height: 60px;" />
       </div>
       <div style="font-size: 1.2em;">
-        {{ day.main.temp_min|round }}° / {{ day.main.temp_max|round }}°
+        {{ day.main.temp_min|round }}°|{{ day.main.temp_max|round }}°
       </div>
     </div>
   {% endfor %}

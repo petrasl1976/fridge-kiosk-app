@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Fridge</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Šaldytuvo ekranas</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <style>
     html, body {
       margin: 0; padding: 0;
@@ -17,6 +19,19 @@
       height: 100%;
     }
     /* Čia galite dėti bendrus stilius, kuriuos naudos visi šablonai */
+    /* Temperatūros spalvų stiliai */
+    .temp-warning {
+      color: #ff5722;
+      font-weight: bold;
+    }
+    .temp-attention {
+      color: #ffc107;
+      font-weight: bold;
+    }
+    .temp-normal {
+      color: #4caf50;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>

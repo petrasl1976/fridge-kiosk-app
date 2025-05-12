@@ -1,0 +1,68 @@
+{# Voice module overlay #}
+<div id="voice-overlay" class="voice-overlay"
+     style="top: {{ config.VOICE_OVERLAY.top }};
+            left: {{ config.VOICE_OVERLAY.left }};
+            width: {{ config.VOICE_OVERLAY.width }};
+            height: {{ config.VOICE_OVERLAY.height }};
+            background: {{ config.VOICE_OVERLAY.background }};
+            color: {{ config.VOICE_OVERLAY.color }};
+            padding: {{ config.VOICE_OVERLAY.padding }};
+            border-radius: {{ config.VOICE_OVERLAY.border_radius }};
+            z-index: {{ config.VOICE_OVERLAY.z_index }};">
+    <div class="voice-status">
+        <div class="voice-icon mic-status" onclick="toggleMic()">
+            <i class="fas fa-microphone"></i>
+            <span class="status-text">MIC</span>
+        </div>
+        <div class="voice-icon sound-status" onclick="toggleSound()">
+            <i class="fas fa-volume-up"></i>
+            <span class="status-text">SOUND</span>
+        </div>
+    </div>
+</div>
+
+<style>
+.voice-overlay {
+    position: absolute;
+    font-family: Arial, sans-serif;
+    display: none; /* Pradžioj paslėptas */
+}
+
+.voice-status {
+    display: flex;
+    gap: 15px;
+}
+
+.voice-icon {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer; /* Rodo, kad elementas paspaudžiamas */
+    transition: transform 0.2s ease; /* Efektas paspaudus */
+}
+
+.voice-icon:hover {
+    transform: scale(1.1); /* Padidinimas užvedus pelę */
+}
+
+.voice-icon:active {
+    transform: scale(0.95); /* Sumažinimas paspaudus */
+}
+
+.voice-icon i {
+    font-size: {{ config.VOICE_OVERLAY.font_size }};
+}
+
+.status-text {
+    font-size: {{ config.VOICE_OVERLAY.font_size }};
+    font-weight: bold;
+}
+
+.voice-icon.active {
+    color: #4CAF50;
+}
+
+.voice-icon.inactive {
+    color: #f44336;
+}
+</style> 

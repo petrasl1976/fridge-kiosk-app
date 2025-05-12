@@ -8,10 +8,34 @@
   font-size: {{ discord_overlay.font_size }};
   color: {{ discord_overlay.color }};
   background: {{ discord_overlay.background }};
-  overflow: auto;
+  overflow: hidden;
   padding: {{ discord_overlay.padding }};
   text-shadow: 2px 2px 4px rgba(0,0,0,1);
 ">
-  Loading Discord messages...
+  <div style="height: 100%; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; -webkit-scrollbar-width: none;">
+    <div style="padding-right: 15px;">Loading Discord messages...</div>
+  </div>
 </div>
+
+<style>
+#discord-overlay > div::-webkit-scrollbar {
+  display: none;
+}
+
+.discord-image-container {
+  margin-top: 5px;
+  max-width: 100%;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+  padding: 2px;
+  text-align: left;
+}
+
+.discord-image-container img {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 5px;
+  object-fit: contain;
+}
+</style>
 
