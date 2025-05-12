@@ -30,56 +30,6 @@ while getopts "c" opt; do
     esac
 done
 
-# Funkcija pagrindinių reikalingų failų kopijavimui
-copy_required_files() {
-    local dest_dir=$1
-    
-    echo "Kopijuoju reikalingus failus į $dest_dir..."
-    # Pagrindiniai failai
-    cp app.py "$dest_dir/"
-    cp config.py "$dest_dir/"
-    
-    # Python moduliai
-    if [ -f "temp_monitor.py" ]; then
-        cp temp_monitor.py "$dest_dir/"
-    else
-        echo "ĮSPĖJIMAS: temp_monitor.py failas nerastas"
-    fi
-    
-    if [ -f "discord_voice.py" ]; then
-        cp discord_voice.py "$dest_dir/"
-    else
-        echo "ĮSPĖJIMAS: discord_voice.py failas nerastas"
-    fi
-    
-    # Slapti failai, jei jie egzistuoja
-    if [ -f "client_secret.json" ]; then
-        cp client_secret.json "$dest_dir/"
-    else
-        echo "ĮSPĖJIMAS: client_secret.json failas nerastas, jį reikės sukurti rankiniu būdu"
-    fi
-    
-    # Kopijuojame arba sukuriame .env failą
-    if [ -f ".env" ]; then
-        cp .env "$dest_dir/"
-    elif [ -f ".env.example" ]; then
-        cp .env.example "$dest_dir/.env"
-        echo "Sukurtas .env failas iš pavyzdžio. Būtinai pakeiskite nustatymus pagal savo poreikius!"
-    else
-        echo "ĮSPĖJIMAS: .env failai nerasti, juos reikės sukurti rankiniu būdu"
-    fi
-    
-    # Kopijuojame statinius failus ir šablonus
-    cp -r static "$dest_dir/"
-    cp -r templates "$dest_dir/"
-    
-    # Sukuriame tuščius failus, reikalingus darbui
-    touch "$dest_dir/albums_cache.json"
-    touch "$dest_dir/log.log"
-    
-    echo "Visi failai nukopijuoti sėkmingai."
-}
-
 # Funkcija Python virtualios aplinkos sukūrimui ir modulių įdiegimui
 setup_python_env() {
     local app_dir=$1
@@ -145,93 +95,55 @@ echo "Įjungiu seatd servisą..."
 systemctl enable --now seatd
 
 echo "Ruošiu Python aplinką..."
-# Sukuriame projekto direktoriją
-APP_DIR="/home/kiosk/fridge-kiosk-app"
-if [ $CLEAR_APP -eq 1 ]; then
-    if [ -d "$APP_DIR" ]; then
-        echo "Šalinu seną aplikacijos direktoriją..."
-        rm -rf "$APP_DIR"
-    fi
-    mkdir -p "$APP_DIR"
-    
-    # Kopijuojame failus ir sukuriame virtualią aplinką
-    copy_required_files "$APP_DIR"
-    setup_python_env "$APP_DIR"
-    
-else
-    # Jei direktorija neegzistuoja, sukuriame ją
-    if [ ! -d "$APP_DIR" ]; then
-        echo "Kuriu naują aplikacijos direktoriją..."
-        mkdir -p "$APP_DIR"
-        
-        # Kopijuojame failus ir sukuriame virtualią aplinką
-        copy_required_files "$APP_DIR"
-        setup_python_env "$APP_DIR"
-        
-    else
-        echo "Aplikacijos direktorija jau egzistuoja, atnaujinu failus..."
-        
-        # Atnaujiname tik pagrindinius failus
-        cp app.py "$APP_DIR/"
-        cp config.py "$APP_DIR/"
-        cp client_secret.json "$APP_DIR/"
-        cp .env "$APP_DIR/"
-        cp .env.example "$APP_DIR/"
-        cp -r static "$APP_DIR/"
-        cp -r templates "$APP_DIR/"
-        
-        # Kopijuojame Python modulius
-        if [ -f "temp_monitor.py" ]; then
-            cp temp_monitor.py "$APP_DIR/"
-        else
-            echo "ĮSPĖJIMAS: temp_monitor.py failas nerastas"
-        fi
-        
-        if [ -f "discord_voice.py" ]; then
-            cp discord_voice.py "$APP_DIR/"
-        else
-            echo "ĮSPĖJIMAS: discord_voice.py failas nerastas"
-        fi
-        
-        # Įsitikiname, kad visi reikalingi moduliai yra įdiegti
-        echo "Atnaujiname Python modulius..."
-        setup_python_env "$APP_DIR"
-    fi
+# Gauname esamo projekto direktoriją (ji turėtų būti ta, kurioje dabar esame)
+CURRENT_DIR="$(pwd)"
+KIOSK_APP_DIR="$CURRENT_DIR"
+
+# Tikriname, ar yra svarbūs konfigūracijos failai
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo "Neradau .env failo, kuriu iš pavyzdžio..."
+    cp .env.example .env
+    echo "Sukurtas .env failas. Būtinai pakeiskite nustatymus pagal savo poreikius."
 fi
+
+if [ ! -f "client_secret.json" ]; then
+    echo "ĮSPĖJIMAS: Nerastas client_secret.json failas!"
+    echo "Jums reikės sukurti Google API projekto kredencialus ir įkelti client_secret.json failą."
+fi
+
+# Sukuriame tuščius failus, reikalingus darbui, jei jų nėra
+if [ ! -f "albums_cache.json" ]; then
+    touch albums_cache.json
+fi
+
+if [ ! -f "log.log" ]; then
+    touch log.log
+fi
+
+# Sukuriame virtualią aplinką
+setup_python_env "$KIOSK_APP_DIR"
 
 # Atnaujiname shebang
-sed -i "1c #!$APP_DIR/venv/bin/python3" "$APP_DIR/app.py"
+sed -i "1c #!$KIOSK_APP_DIR/venv/bin/python3" "$KIOSK_APP_DIR/app.py"
 
 # Nustatome teises
-chown -R kiosk:kiosk "$APP_DIR"
-find "$APP_DIR" -type f -exec chmod 644 {} \;
-find "$APP_DIR" -type d -exec chmod 755 {} \;
-chmod 600 "$APP_DIR/client_secret.json"
-chmod 600 "$APP_DIR/config.py"
-chmod 600 "$APP_DIR/.env"
-chmod +x "$APP_DIR/app.py"
-chmod 666 "$APP_DIR/albums_cache.json"
-chmod 666 "$APP_DIR/log.log"
+chown -R kiosk:kiosk "$KIOSK_APP_DIR"
+find "$KIOSK_APP_DIR" -type f -exec chmod 644 {} \;
+find "$KIOSK_APP_DIR" -type d -exec chmod 755 {} \;
+if [ -f "$KIOSK_APP_DIR/client_secret.json" ]; then
+    chmod 600 "$KIOSK_APP_DIR/client_secret.json"
+fi
+chmod 600 "$KIOSK_APP_DIR/config.py"
+chmod 600 "$KIOSK_APP_DIR/.env"
+chmod +x "$KIOSK_APP_DIR/app.py"
+chmod 666 "$KIOSK_APP_DIR/albums_cache.json"
+chmod 666 "$KIOSK_APP_DIR/log.log"
 
 # Užtikriname, kad Python moduliai turi teisingas teises
-chmod 644 "$APP_DIR/temp_monitor.py" 
-chmod 644 "$APP_DIR/discord_voice.py"
+chmod 644 "$KIOSK_APP_DIR/temp_monitor.py" 
+chmod 644 "$KIOSK_APP_DIR/discord_voice.py"
 
-# Patikrinkime, ar visi būtini failai egzistuoja
-echo "Tikrinu, ar visi būtini failai egzistuoja..."
-MISSING_FILES=0
-for file in "$APP_DIR/app.py" "$APP_DIR/config.py" "$APP_DIR/temp_monitor.py" "$APP_DIR/discord_voice.py"; do
-    if [ ! -f "$file" ]; then
-        echo "ĮSPĖJIMAS: Būtinas failas '$file' neegzistuoja!"
-        MISSING_FILES=1
-    fi
-done
 
-if [ $MISSING_FILES -eq 1 ]; then
-    echo "Trūksta kai kurių būtinų failų. Aplikacija gali neveikti tinkamai."
-else
-    echo "Visi būtini failai egzistuoja."
-fi
 
 echo "Kuriu paleidimo skriptą..."
 cat > /home/kiosk/start-kiosk.sh << 'EOL'
@@ -290,16 +202,16 @@ chmod +x /home/kiosk/start-kiosk.sh
 chown kiosk:kiosk /home/kiosk/start-kiosk.sh
 
 echo "Kuriu servisų failus..."
-cat > /etc/systemd/system/fridge-app.service << 'EOL'
+cat > /etc/systemd/system/fridge-app.service << EOL
 [Unit]
 Description=Fridge Flask Application
 After=network.target
 
 [Service]
 User=kiosk
-WorkingDirectory=/home/kiosk/fridge-kiosk-app
-Environment="PATH=/home/kiosk/fridge-kiosk-app/venv/bin"
-ExecStart=/home/kiosk/fridge-kiosk-app/venv/bin/python app.py
+WorkingDirectory=$KIOSK_APP_DIR
+Environment="PATH=$KIOSK_APP_DIR/venv/bin"
+ExecStart=$KIOSK_APP_DIR/venv/bin/python app.py
 # Suteikiame daugiau teisių, kad galėtume skaityti temperatūros duomenis
 ReadWritePaths=/sys/class/thermal/thermal_zone0
 ProtectSystem=true
@@ -341,40 +253,36 @@ Restart=always
 WantedBy=multi-user.target
 EOL
 
-# Perkrauname systemd konfigūraciją
+echo "Perkraunu systemd..."
 systemctl daemon-reload
 
-# Testuojame Python importus
-echo "Testuojame Python importus..."
-if sudo -u kiosk "$APP_DIR/venv/bin/python" -c "import flask; import requests; import google.oauth2.credentials; import broadlink; import dotenv; import discord; print('Visi Python moduliai sėkmingai importuoti!'); import discord_voice; import temp_monitor; print('Lokali moduliai sėkmingai importuoti!')"; then
-    echo "Visi moduliai sėkmingai įdiegti."
-else
-    echo "KLAIDA: Nepavyko importuoti modulių, prašome patikrinti log.log failą"
-fi
+echo "Įjungiu servisus..."
+systemctl enable fridge-app.service
+systemctl enable kiosk.service
 
 echo "Diegimas baigtas!"
 echo
-echo "Tolimesni žingsniai:"
-echo "1. Įjunkite servisus:"
-echo "   sudo systemctl enable fridge-app.service"
-echo "   sudo systemctl enable kiosk.service"
+echo "Instrukcijos:"
 echo
-echo "2. Suteikite teises Google Photos ir Calendar:"
-echo "   - Kompiuteryje paleiskite: ssh -A -L 8080:localhost:8080 puk@192.168.88.55"
-echo "   - Naršyklėje atidarykite: http://localhost:8080"
-echo "   - Suteikite reikiamas teises"
+echo "1. Servisų valdymas:"
+echo "   sudo systemctl restart fridge-app.service"
+echo "   sudo systemctl restart kiosk.service"
 echo
-echo "3. Paleiskite servisus:"
-echo "   sudo systemctl start fridge-app.service"
-echo "   sudo systemctl start kiosk.service"
+echo "2. Logų peržiūra:"
+echo "   sudo journalctl -fu fridge-app.service"
+echo "   sudo journalctl -fu kiosk.service"
 echo
-echo "4. Konfigūracija:"
+echo "3. Konfigūracija:"
 echo "   - Slapti parametrai (.env failas): API raktai, tokenai ir kiti slapti duomenys"
 echo "   - Visi kiti parametrai (config.py failas): rodymo trukmė, rodymo tipai, temperatūros ribos"
 echo
-echo "5. Temperatūros stebėjimas:"
+echo "4. Temperatūros stebėjimas:"
 echo "   - Sistema automatiškai stebės CPU temperatūrą"
 echo "   - Kai temperatūra viršys 65°C, sistema laikinai perjungs tik į foto režimą"
+echo
+echo "5. Discord balsas:"
+echo "   - Įsitikinkite, kad .env faile nustatyti DISCORD_BOT_TOKEN ir DISCORD_VOICE_CHANNEL_ID"
+echo "   - Mikrofono ir garsiakalbio būseną galima konfigūruoti config.py faile (MIC_ENABLED ir SOUND_ENABLED parametrai)"
 echo
 echo "SVARBU: Po pirmos instaliacijos perkraukite sistemą (sudo reboot)"
 

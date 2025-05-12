@@ -53,8 +53,11 @@ class Config:
 
     DISCORD = {
         "BOT_TOKEN": os.getenv("DISCORD_BOT_TOKEN"),
-        "CHANNEL_ID": os.getenv("DISCORD_CHANNEL_ID", "1320327774548000828"),
+        "CHANNEL_ID": os.getenv("DISCORD_CHANNEL_ID"),
+        "VOICE_CHANNEL_ID": os.getenv("DISCORD_VOICE_CHANNEL_ID"),
         "MESSAGE_COUNT": 10,
+        "MIC_ENABLED": False,   # Mikrofono būsena: True - įjungtas, False - išjungtas
+        "SOUND_ENABLED": True   # Garso būsena: True - įjungtas, False - išjungtas
     }
 
     BROADLINK = {

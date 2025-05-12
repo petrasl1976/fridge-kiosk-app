@@ -704,21 +704,6 @@ def get_disk_usage():
         app.logger.error(f"Klaida gaunant disko naudojimą: {e}")
         return {'error': str(e)}
 
-@app.route('/voice_status')
-def voice_status():
-    """Grąžina voice būsenos informaciją"""
-    if discord_available and voice_client:
-        return jsonify(voice_client.get_status())
-    else:
-        # Jei voice kliento nėra, grąžiname tuščią statusą
-        error_msg = "Discord modulis neįdiegtas" if not discord_available else "Discord voice klientas neinicializuotas"
-        return jsonify({
-            "connected": False,
-            "muted": True,
-            "deafened": True,
-            "error": error_msg
-        })
-
 @app.route('/voice_control', methods=['POST'])
 def voice_control():
     """Valdo voice kliento būseną"""
@@ -744,6 +729,23 @@ def voice_control():
         app.logger.error(f"Klaida voice_control: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+@app.route('/voice_status', methods=['GET'])
+def voice_status():
+    """Grąžina voice kliento būseną"""
+    if not discord_available:
+        return jsonify({"success": False, "message": "Discord modulis neįdiegtas"}), 400
+        
+    if not voice_client:
+        return jsonify({"success": False, "message": "Discord voice klientas neinicializuotas"}), 400
+    
+    try:
+        status = voice_client.get_status()
+        return jsonify({"success": True, "status": status})
+            
+    except Exception as e:
+        app.logger.error(f"Klaida voice_status: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 # Prieš app paleidimą, startuojame temperatūros stebėjimą
 def before_app_start():
     temp_monitor.start()
@@ -753,6 +755,20 @@ def before_app_start():
     if discord_available and voice_client:
         voice_client.start()
         app.logger.info("Discord voice klientas paleistas")
+        
+        # Nustatome pradinę mikrofono ir garso būseną pagal konfigūraciją
+        try:
+            # Jei sukonfigūruota, kad mikrofonas turi būti įjungtas, bet dabar yra išjungtas
+            if Config.DISCORD.get('MIC_ENABLED', False) != voice_client.muted:
+                threading.Timer(5.0, lambda: voice_client.toggle_mute()).start()
+                app.logger.info(f"Mikrofono būsena bus nustatyta į: {'įjungta' if Config.DISCORD.get('MIC_ENABLED', False) else 'išjungta'}")
+            
+            # Jei sukonfigūruota, kad garsas turi būti įjungtas, bet dabar yra išjungtas
+            if Config.DISCORD.get('SOUND_ENABLED', False) != voice_client.deafened:
+                threading.Timer(5.0, lambda: voice_client.toggle_deafen()).start()
+                app.logger.info(f"Garso būsena bus nustatyta į: {'įjungta' if Config.DISCORD.get('SOUND_ENABLED', False) else 'išjungta'}")
+        except Exception as e:
+            app.logger.error(f"Klaida nustatant pradinę mikrofono ir garso būseną: {e}")
 
 # Užregistruojame shutdown funckiją
 def shutdown_cleanup():
