@@ -8,23 +8,35 @@ echo "REQUIREMENTS:"
 echo "  • Raspberry Pi OS Lite (latest version recommended)"
 echo "  • Connected vertical screen"
 echo "  • Internet connection"
-echo "  • User 'kiosk' should be created before installation"
+echo "  • User 'kiosk' must be created before running this script"
 echo
 echo "USAGE:"
-echo "  • Run this script with sudo: sudo ./install-kiosk-rpi5.sh"
+echo "  • Log in as kiosk user and run: sudo ./install-kiosk-rpi5.sh"
 echo "  • You can run this script multiple times if needed - it's safe!"
 echo
-echo "IMPORTANT: This script will create necessary services, create 'kiosk' user"
-echo "           (if it doesn't exist), and prepare the system. If you use a different"
-echo "           user, you'll need to manually adjust service files."
+echo "IMPORTANT: This script must be run as the kiosk user via sudo"
 echo "=================================================="
 echo
 echo "Press ENTER to continue or CTRL+C to cancel..."
 read
 
-# Check if running with sudo
+# Check if running as kiosk user with sudo
+if [ "$(logname)" != "kiosk" ]; then 
+    echo "ERROR: This script must be run from the kiosk user's account with sudo"
+    echo "Please login as 'kiosk' user and run: sudo ./install-kiosk-rpi5.sh"
+    exit 1
+fi
+
+# Check if running with sudo/as root
 if [ "$(id -u)" -ne 0 ]; then 
-    echo "ERROR: Run this script with sudo"
+    echo "ERROR: This script must be run with sudo"
+    echo "Please run: sudo ./install-kiosk-rpi5.sh"
+    exit 1
+fi
+
+# Check if sudo is available
+if ! command -v sudo &> /dev/null; then
+    echo "ERROR: sudo is not installed"
     exit 1
 fi
 
@@ -75,12 +87,18 @@ else
     echo "All required packages already installed"
 fi
 
-echo "Creating seat group and kiosk user..."
+echo "Creating required groups and adding kiosk user to them..."
 groupadd -f seat
 groupadd -f render
+# Check if kiosk user exists
 if ! id "kiosk" &>/dev/null; then
-    useradd -m kiosk
+    echo "ERROR: User 'kiosk' does not exist!"
+    echo "Please create the 'kiosk' user before running this script:"
+    echo "  sudo useradd -m kiosk"
+    exit 1
 fi
+
+# Add kiosk to required groups
 usermod -aG video,input,seat,render,tty kiosk
 
 # Set DRM permissions (overwrite rules, safe to do multiple times)
