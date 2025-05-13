@@ -21,6 +21,10 @@ import googleapiclient.discovery
 import googleapiclient.discovery_cache
 googleapiclient.discovery_cache.LOGGER.setLevel(logging.ERROR)
 
+# Išjungiame werkzeug įprastų HTTP užklausų logginimą
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.setLevel(logging.WARNING)  # Rodyti tik WARNING ir aukštesnio lygio žinutes
+
 import broadlink
 from config import Config
 from temp_monitor import TemperatureMonitor
@@ -746,6 +750,44 @@ def voice_status():
         app.logger.error(f"Klaida voice_status: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+# Registruojame shutdown funkciją
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    pass  # Kol kas nieko
+
+def cleanup_resources():
+    # Sustabdome temperatūros stebėjimą
+    if temp_monitor:
+        temp_monitor.stop()
+        app.logger.info("Temperatūros stebėjimas sustabdytas")
+    
+    # Sustabdome Discord voice klientą
+    if discord_available and voice_client:
+        try:
+            voice_client.stop()
+            app.logger.info("Discord voice klientas sustabdytas")
+        except Exception as e:
+            app.logger.error(f"Klaida stabdant Discord voice klientą: {e}")
+    
+    # Uždarome aiohttp klientų sesijas ir konektorius
+    try:
+        import asyncio
+        import aiohttp
+        
+        # Ieškome neuždarytų konektorių ir sesijų
+        for task in asyncio.all_tasks(loop=asyncio.get_event_loop()):
+            if not task.done() and 'aiohttp' in str(task):
+                task.cancel()
+                app.logger.info(f"Nutraukta neužbaigta aiohttp užduotis: {task}")
+                
+        app.logger.info("Visi aiohttp resursai išvalyti")
+    except Exception as e:
+        app.logger.error(f"Klaida išvalant aiohttp resursus: {e}")
+
+# Nustatome išėjimo procesą
+import atexit
+atexit.register(cleanup_resources)
+
 # Prieš app paleidimą, startuojame temperatūros stebėjimą
 def before_app_start():
     temp_monitor.start()
@@ -770,22 +812,8 @@ def before_app_start():
         except Exception as e:
             app.logger.error(f"Klaida nustatant pradinę mikrofono ir garso būseną: {e}")
 
-# Užregistruojame shutdown funckiją
-def shutdown_cleanup():
-    # Sustabdome Discord voice klientą
-    if discord_available and voice_client:
-        voice_client.stop()
-        app.logger.info("Discord voice klientas sustabdytas")
-        
-    temp_monitor.stop()
-    app.logger.info("Temperatūros stebėjimas sustabdytas")
-    
-# Paleidžiame temperatūros stebėjimą prieš pradėdami app
+# Paleidžiame temperatūros stebėjimą ir inicializuojame Discord klientą
 before_app_start()
-
-# Kai programa išjungiama, sustabdome temperatūros stebėjimą
-import atexit
-atexit.register(shutdown_cleanup)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
