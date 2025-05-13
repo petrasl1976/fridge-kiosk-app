@@ -17,27 +17,27 @@ import google.oauth2.credentials
 import google_auth_oauthlib.flow
 import googleapiclient.discovery
 
-# Išjungiame cache įspėjimą
+# Disable cache warning
 import googleapiclient.discovery_cache
 googleapiclient.discovery_cache.LOGGER.setLevel(logging.ERROR)
 
-# Išjungiame werkzeug įprastų HTTP užklausų logginimą
+# Disable werkzeug normal HTTP request logging
 werkzeug_logger = logging.getLogger('werkzeug')
-werkzeug_logger.setLevel(logging.WARNING)  # Rodyti tik WARNING ir aukštesnio lygio žinutes
+werkzeug_logger.setLevel(logging.WARNING)  # Show only WARNING and higher level messages
 
 import broadlink
 from config import Config
 from temp_monitor import TemperatureMonitor
 
-# Bandome importuoti Discord voice modulį, jei jis egzistuoja
+# Try to import Discord voice module if it exists
 try:
     from discord_voice import DiscordVoiceClient
     discord_available = True
 except ImportError:
-    app.logger.warning("Discord voice modulis nėra prieinamas. Voice kanalas neveiks.")
+    app.logger.warning("Discord voice module is not available. Voice channel will not work.")
     discord_available = False
 
-# Pridedame zoneinfo (veikia nuo Python 3.9). Jei neturite, naudokite pytz.
+# Add zoneinfo (works from Python 3.9). If you don't have it, use pytz.
 from zoneinfo import ZoneInfo
 
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
@@ -51,12 +51,12 @@ SCOPES = [
 ]
 
 ALBUMS_CACHE_FILE = 'albums_cache.json'
-CACHE_EXPIRATION = 30 * 24 * 3600  # 30 dienų (buvo 7)
+CACHE_EXPIRATION = 30 * 24 * 3600  # 30 days (was 7)
 
-# Inicializuojame temperatūros stebėjimą
+# Initialize temperature monitoring
 temp_monitor = TemperatureMonitor(Config)
 
-# Inicializuojame Discord voice klientą, jei yra konfiguracijos ir modulis prieinamas
+# Initialize Discord voice client if configuration and module are available
 voice_client = None
 if discord_available and Config.DISCORD and Config.DISCORD.get('BOT_TOKEN') and Config.DISCORD.get('VOICE_CHANNEL_ID'):
     try:
@@ -64,9 +64,9 @@ if discord_available and Config.DISCORD and Config.DISCORD.get('BOT_TOKEN') and 
             token=Config.DISCORD.get('BOT_TOKEN'),
             channel_id=Config.DISCORD.get('VOICE_CHANNEL_ID')
         )
-        app.logger.info('Discord voice klientas sukurtas')
+        app.logger.info('Discord voice client created')
     except Exception as e:
-        app.logger.error(f'Klaida inicializuojant Discord voice klientą: {e}')
+        app.logger.error(f'Error initializing Discord voice client: {e}')
 
 def load_album_cache():
     try:
@@ -126,13 +126,13 @@ def get_random_photo_batch(photos_service):
     try:
         albums = get_all_albums(photos_service)
         if not albums:
-            app.logger.warning("Nerasta albumų.")
+            app.logger.warning("No albums found.")
             return [{"error": "No albums found"}], "Error"
         
-        # Sumaišome albumus atsitiktine tvarka
+        # Shuffle albums in random order
         random.shuffle(albums)
         
-        # Bandome per visus albumus, kol rasime tinkamą
+        # Try all albums until we find a suitable one
         for album_attempt in range(len(albums)):
             album = albums[album_attempt]
             album_title = album.get('title', 'Unknown Album')
@@ -144,17 +144,17 @@ def get_random_photo_batch(photos_service):
                     app.logger.info(f"Album {album_title} has no items, skipping")
                     continue
 
-                # Filtruojame tik tuos, kurie turi creationTime
+                # Filter only those that have creationTime
                 items = [i for i in items if i.get('mediaMetadata', {}).get('creationTime')]
                 if not items:
                     app.logger.info(f"Album {album_title} has no items with creationTime, skipping")
                     continue
 
-                # Identifikuojame medijos tipus ir filtruojame pagal MEDIA_TYPES nustatymą
+                # Identify media types and filter according to MEDIA_TYPES setting
                 processed_items = []
                 for item in items:
                     meta = item.get('mediaMetadata', {})
-                    # Nustatome medijos tipą ir pridedame papildomus metaduomenis
+                    # Determine media type and add additional metadata
                     media_type = "photo"
                     video_metadata = {}
                     
@@ -162,7 +162,7 @@ def get_random_photo_batch(photos_service):
                         media_type = "video"
                         video_metadata = meta.get('video', {})
                     
-                    # Filtruojame pagal nustatytą medijos tipą
+                    # Filter by configured media type
                     if Config.MEDIA_TYPES.lower() == "all" or Config.MEDIA_TYPES.lower() == media_type:
                         processed_items.append({
                             'baseUrl': item.get('baseUrl', ''),
@@ -173,17 +173,17 @@ def get_random_photo_batch(photos_service):
                             'mimeType': item.get('mimeType', '')
                         })
                 
-                # Jei šiame albume yra tinkamo tipo medijos, naudojame ją
+                # If this album has suitable media, use it
                 if processed_items:
                     app.logger.info(f"Album {album_title} has {len(processed_items)} matching items of type {Config.MEDIA_TYPES}")
                     
-                    # Rūšiuojame pagal creationTime
+                    # Sort by creationTime
                     processed_items.sort(key=lambda x: x['photo_time'])
                     total = len(processed_items)
                     start_index = random.randint(0, total - 1)
                     batch = []
                     
-                    # Renkame batch
+                    # Collect batch
                     count = min(Config.PHOTO_BATCH_COUNT, total)
                     for i in range(count):
                         idx = (start_index + i) % total
@@ -195,20 +195,15 @@ def get_random_photo_batch(photos_service):
             except googleapiclient.errors.HttpError as error:
                 app.logger.error(f"Error processing album {album_title}: {error}")
                 if error.resp.status == 429:
-                    # Quota exceeded - sustojame ir grąžiname klaidos pranešimą
+                    # Quota exceeded - stop and return error message
                     app.logger.warning("Google Photos API quota exceeded")
                     return [{"error": "Google Photos API quota exceeded", "mediaType": "error"}], "API Limit Error"
-                # Tęsiame su kitu albumu, jei klaida su dabartiniu
-                continue
-        
-        # Jei apeiti visus albumus ir nerasta tinkamo tipo medijos
-        app.logger.warning(f"No albums with media type '{Config.MEDIA_TYPES}' found after checking all {len(albums)} albums")
-        
+
     except Exception as e:
         app.logger.error(f"Unexpected error in get_random_photo_batch: {e}")
         return [{"error": str(e), "mediaType": "error"}], "Error"
     
-    # Jei niekas nerasta
+    # If nothing found
     return [{"error": "No suitable media found", "mediaType": "error"}], "No Media"
 
 def parse_meteo_lt_time(dt_str):
@@ -267,7 +262,7 @@ def get_weather():
 
 def get_sensor_data():
     try:
-        # Gauname sensoriaus duomenis
+        # Get sensor data
         sensor_data = {}
         devices = broadlink.discover(timeout=Config.BROADLINK["DISCOVER_TIMEOUT"])
         for d in devices:
@@ -276,26 +271,26 @@ def get_sensor_data():
                 sensor_data = d.check_sensors()
                 break
         
-        # Jei nėra sensoriaus duomenų ar yra klaida, sukuriame tuščią objektą
+        # If there is no sensor data or there is an error, create an empty object
         if not sensor_data or "error" in sensor_data:
             sensor_data = {}
         
-        # Pridedame CPU temperatūrą
+        # Add CPU temperature
         cpu_temp = temp_monitor.get_cpu_temperature()
         temp_status = temp_monitor.get_status()
         
-        # Sujungiame duomenis
+        # Combine data
         result = {
             "temperature": sensor_data.get("temperature"),
             "humidity": sensor_data.get("humidity"),
             "cpu_temp": cpu_temp
         }
         
-        # Jei nėra sensoriaus duomenų, bet yra CPU temperatūra, nerodome klaidos
+        # If there is no sensor data but there is CPU temperature, do not show error
         if cpu_temp > 0 and ("error" in sensor_data or not sensor_data):
             result.pop("error", None)
             
-        # Jei yra klaida iš sensoriaus, ją išlaikome
+        # If there is an error from the sensor, keep it
         if "error" in sensor_data:
             result["error"] = sensor_data["error"]
             
@@ -313,7 +308,7 @@ def get_event_color(summary):
     prefix = summary[:2].upper()
     return Config.EVENT_COLORS.get(prefix, Config.DEFAULT_EVENT_COLOR)
 
-# Registruojame filtrą event_color
+# Register event_color filter
 app.jinja_env.filters['event_color'] = get_event_color
 
 @app.template_filter('strftime')
@@ -331,7 +326,7 @@ def newsensors():
 
 @app.route('/discordmessages')
 def discord_messages():
-    # Gaunama ne tik žinutės turinys, bet ir embeds bei attachments
+    # Get not only message content, but also embeds and attachments
     params = {
         "limit": Config.DISCORD['MESSAGE_COUNT']
     }
@@ -345,13 +340,13 @@ def discord_messages():
             username = m['author']['username']
             m['color'] = get_username_color(username)
             
-            # Užtikrinam, kad paveikslėliai nebūtų supressinti (Proxy URL nėra atfiltruoti)
+            # Ensure images are not suppressed (Proxy URLs are not filtered)
             if 'attachments' in m and m['attachments']:
                 for attachment in m['attachments']:
                     if 'proxy_url' in attachment and not 'url' in attachment:
                         attachment['url'] = attachment['proxy_url']
             
-            # Užtikrinam, kad embed paveikslėliai nebūtų supressinti
+            # Ensure embed images are not suppressed
             if 'embeds' in m and m['embeds']:
                 for embed in m['embeds']:
                     if 'image' in embed and 'proxy_url' in embed['image'] and not 'url' in embed['image']:
@@ -389,7 +384,7 @@ def index():
         )
 
         photo_batch, album_title = get_random_photo_batch(photos_service)
-        # Patikriname, ar turime klaidos pranešimą
+        # Check if we have an error message
         if photo_batch and len(photo_batch) > 0 and 'error' in photo_batch[0]:
             error_message = photo_batch[0]['error']
     except Exception as e:
@@ -464,7 +459,7 @@ def index():
         summary_max_length=Config.EVENT_SUMMARY_MAX_LENGTH,
         show_holidays=Config.SHOW_HOLIDAYS,
         holidays=Config.HOLIDAYS,
-        config=Config,  # Pridedame config objektą
+        config=Config,  # Added config object
         error_message=error_message
     )
 
@@ -483,11 +478,11 @@ def newphoto():
 
         photo_batch, album_title = get_random_photo_batch(photos_service)
         
-        # Patikriname, ar photo_batch yra None arba turi klaidos pranešimą
+        # Check if photo_batch is None or has an error message
         if not photo_batch:
             return jsonify({"error": "No photos found", "photos": [{"error": "No photos found", "mediaType": "error"}]}), 404
         
-        # Jei pirmas elementas turi error lauką, grąžiname klaidos pranešimą bet su 200 statusu
+        # If the first element has an error field, return the error message but with 200 status
         if 'error' in photo_batch[0]:
             return jsonify({"error": photo_batch[0]['error'], "photos": photo_batch, "album_title": album_title})
 
@@ -495,7 +490,7 @@ def newphoto():
         
     except Exception as e:
         app.logger.error(f"Error in newphoto: {e}")
-        # Grąžiname klaidos pranešimą, bet su 200 statusu kad frontend galėtų jį apdoroti
+        # Return error message but with 200 status so frontend can handle it
         return jsonify({"error": str(e), "photos": [{"error": str(e), "mediaType": "error"}], "album_title": "Error"})
 
 @app.route('/newweather')
@@ -556,7 +551,7 @@ def calendarevents():
     )
 
 ###################################################################################
-# Pataisytas /todayevents maršrutas, kad rodytų vietinę (Europe/Vilnius) parą
+# Fixed /todayevents route, to show local (Europe/Vilnius) day
 ###################################################################################
 @app.route('/todayevents')
 def todayevents():
@@ -567,16 +562,16 @@ def todayevents():
     creds = google.oauth2.credentials.Credentials(**creds_data)
     cal_service = googleapiclient.discovery.build('calendar', 'v3', credentials=creds)
 
-    # Nustatome laiko zoną
+    # Set time zone
     vilnius_tz = ZoneInfo('Europe/Vilnius')
 
-    # Šiandienos vidurnaktis vietos laiku
+    # Today's midnight in location time
     now = datetime.datetime.now(vilnius_tz)
     local_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    # Dienos pabaiga (23:59:59) - 1 sek. iki kitos paros
+    # Day end (23:59:59) - 1 sec to next day
     local_end = local_midnight + datetime.timedelta(days=1, seconds=-1)
 
-    # Konvertuojame į ISO formatą be 'Z' (nes tai vietinis laikas, ne UTC)
+    # Convert to ISO format without 'Z' (since it's location time, not UTC)
     time_min = local_midnight.isoformat()
     time_max = local_end.isoformat()
 
@@ -590,7 +585,7 @@ def todayevents():
     ).execute()
     events = ev_res.get('items', [])
 
-    # Grąžiname fragmentą, kuriame bus spalvos
+    # Return fragment where colors will be
     return render_template(
         'today_events_fragment.html',
         events=events,
@@ -633,7 +628,7 @@ def oauth2callback():
 
 @app.route('/systemstatus')
 def system_status():
-    """Grąžina sistemos būsenos informaciją JSON formatu"""
+    """Returns system status information in JSON format"""
     status = {
         'system': {
             'uptime': get_uptime(),
@@ -645,17 +640,17 @@ def system_status():
     return jsonify(status)
 
 def get_uptime():
-    """Gauna sistemos uptime"""
+    """Gets system uptime"""
     try:
         with open('/proc/uptime', 'r') as f:
             uptime_seconds = float(f.readline().split()[0])
             return str(datetime.timedelta(seconds=uptime_seconds))
     except Exception as e:
-        app.logger.error(f"Klaida gaunant uptime: {e}")
-        return "Nežinomas"
+        app.logger.error(f"Error getting uptime: {e}")
+        return "Unknown"
 
 def get_memory_usage():
-    """Gauna RAM atminties naudojimą"""
+    """Gets RAM usage"""
     try:
         with open('/proc/meminfo', 'r') as f:
             meminfo = {}
@@ -675,20 +670,20 @@ def get_memory_usage():
                 'percent': f"{(used/total*100):.1f}%"
             }
     except Exception as e:
-        app.logger.error(f"Klaida gaunant RAM naudojimą: {e}")
+        app.logger.error(f"Error getting RAM usage: {e}")
         return {'error': str(e)}
 
 def get_disk_usage():
-    """Gauna disko naudojimą"""
+    """Gets disk usage"""
     try:
-        # Bandome nuskaityti tiesiogiai iš /proc/mounts ir statvfs
+        # Try to read directly from /proc/mounts and statvfs
         import os
         stat = os.statvfs('/')
         total = stat.f_blocks * stat.f_frsize
         free = stat.f_bfree * stat.f_frsize
         used = total - free
         
-        # Konvertuojame į žmogui suprantamą formatą
+        # Convert to human readable format
         def human_readable_size(size):
             for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
                 if size < 1024.0:
@@ -705,17 +700,17 @@ def get_disk_usage():
             'percent': f"{percent:.1f}%"
         }
     except Exception as e:
-        app.logger.error(f"Klaida gaunant disko naudojimą: {e}")
+        app.logger.error(f"Error getting disk usage: {e}")
         return {'error': str(e)}
 
 @app.route('/voice_control', methods=['POST'])
 def voice_control():
-    """Valdo voice kliento būseną"""
+    """Controls voice client state"""
     if not discord_available:
-        return jsonify({"success": False, "message": "Discord modulis neįdiegtas"}), 400
+        return jsonify({"success": False, "message": "Discord module not installed"}), 400
         
     if not voice_client:
-        return jsonify({"success": False, "message": "Discord voice klientas neinicializuotas"}), 400
+        return jsonify({"success": False, "message": "Discord voice client not initialized"}), 400
     
     try:
         action = request.json.get('action')
@@ -727,92 +722,92 @@ def voice_control():
             result = voice_client.toggle_deafen()
             return jsonify(result)
         else:
-            return jsonify({"success": False, "message": "Neteisinga komanda"}), 400
+            return jsonify({"success": False, "message": "Invalid command"}), 400
             
     except Exception as e:
-        app.logger.error(f"Klaida voice_control: {e}")
+        app.logger.error(f"Error in voice_control: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
 @app.route('/voice_status', methods=['GET'])
 def voice_status():
-    """Grąžina voice kliento būseną"""
+    """Returns voice client state"""
     if not discord_available:
-        return jsonify({"success": False, "message": "Discord modulis neįdiegtas"}), 400
+        return jsonify({"success": False, "message": "Discord module not installed"}), 400
         
     if not voice_client:
-        return jsonify({"success": False, "message": "Discord voice klientas neinicializuotas"}), 400
+        return jsonify({"success": False, "message": "Discord voice client not initialized"}), 400
     
     try:
         status = voice_client.get_status()
         return jsonify({"success": True, "status": status})
             
     except Exception as e:
-        app.logger.error(f"Klaida voice_status: {e}")
+        app.logger.error(f"Error in voice_status: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
-# Registruojame shutdown funkciją
+# Register shutdown function
 @app.teardown_appcontext
 def shutdown_session(exception=None):
-    pass  # Kol kas nieko
+    pass  # For now nothing
 
 def cleanup_resources():
-    # Sustabdome temperatūros stebėjimą
+    # Stop temperature monitoring
     if temp_monitor:
         temp_monitor.stop()
-        app.logger.info("Temperatūros stebėjimas sustabdytas")
+        app.logger.info("Temperature monitoring stopped")
     
-    # Sustabdome Discord voice klientą
+    # Stop Discord voice client
     if discord_available and voice_client:
         try:
             voice_client.stop()
-            app.logger.info("Discord voice klientas sustabdytas")
+            app.logger.info("Discord voice client stopped")
         except Exception as e:
-            app.logger.error(f"Klaida stabdant Discord voice klientą: {e}")
+            app.logger.error(f"Error stopping Discord voice client: {e}")
     
-    # Uždarome aiohttp klientų sesijas ir konektorius
+    # Close aiohttp client sessions and connectors
     try:
         import asyncio
         import aiohttp
         
-        # Ieškome neuždarytų konektorių ir sesijų
+        # Look for unclosed connectors and sessions
         for task in asyncio.all_tasks(loop=asyncio.get_event_loop()):
             if not task.done() and 'aiohttp' in str(task):
                 task.cancel()
-                app.logger.info(f"Nutraukta neužbaigta aiohttp užduotis: {task}")
+                app.logger.info(f"Interrupted unfinished aiohttp task: {task}")
                 
-        app.logger.info("Visi aiohttp resursai išvalyti")
+        app.logger.info("All aiohttp resources cleaned up")
     except Exception as e:
-        app.logger.error(f"Klaida išvalant aiohttp resursus: {e}")
+        app.logger.error(f"Error cleaning up aiohttp resources: {e}")
 
-# Nustatome išėjimo procesą
+# Set exit process
 import atexit
 atexit.register(cleanup_resources)
 
-# Prieš app paleidimą, startuojame temperatūros stebėjimą
+# Before app startup, start temperature monitoring
 def before_app_start():
     temp_monitor.start()
-    app.logger.info("Temperatūros stebėjimas pradėtas")
+    app.logger.info("Temperature monitoring started")
     
-    # Paleidžiame Discord voice klientą
+    # Start Discord voice client
     if discord_available and voice_client:
         voice_client.start()
-        app.logger.info("Discord voice klientas paleistas")
+        app.logger.info("Discord voice client started")
         
-        # Nustatome pradinę mikrofono ir garso būseną pagal konfigūraciją
+        # Set initial microphone and sound state according to configuration
         try:
-            # Jei sukonfigūruota, kad mikrofonas turi būti įjungtas, bet dabar yra išjungtas
+            # If configured to have microphone enabled, but it's currently disabled
             if Config.DISCORD.get('MIC_ENABLED', False) != voice_client.muted:
                 threading.Timer(5.0, lambda: voice_client.toggle_mute()).start()
-                app.logger.info(f"Mikrofono būsena bus nustatyta į: {'įjungta' if Config.DISCORD.get('MIC_ENABLED', False) else 'išjungta'}")
+                app.logger.info(f"Microphone state will be set to: {'enabled' if Config.DISCORD.get('MIC_ENABLED', False) else 'disabled'}")
             
-            # Jei sukonfigūruota, kad garsas turi būti įjungtas, bet dabar yra išjungtas
+            # If configured to have sound enabled, but it's currently disabled
             if Config.DISCORD.get('SOUND_ENABLED', False) != voice_client.deafened:
                 threading.Timer(5.0, lambda: voice_client.toggle_deafen()).start()
-                app.logger.info(f"Garso būsena bus nustatyta į: {'įjungta' if Config.DISCORD.get('SOUND_ENABLED', False) else 'išjungta'}")
+                app.logger.info(f"Sound state will be set to: {'enabled' if Config.DISCORD.get('SOUND_ENABLED', False) else 'disabled'}")
         except Exception as e:
-            app.logger.error(f"Klaida nustatant pradinę mikrofono ir garso būseną: {e}")
+            app.logger.error(f"Error setting initial microphone and sound state: {e}")
 
-# Paleidžiame temperatūros stebėjimą ir inicializuojame Discord klientą
+# Start temperature monitoring and initialize Discord client
 before_app_start()
 
 if __name__ == '__main__':

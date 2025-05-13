@@ -9,174 +9,174 @@ class DiscordVoiceClient:
         self.channel_id = channel_id
         self.logger = logging.getLogger('discord_voice')
         
-        # Būsenos kintamieji
+        # State variables
         self.connected = False
         self.muted = True
         self.deafened = True
         
-        # Discord kliento inicijavimas
+        # Discord client initialization
         self.client = None
         self.voice_client = None
         self.shutdown_event = threading.Event()
         
-        # Kuriame Discord intents
+        # Create Discord intents
         intents = discord.Intents.default()
         intents.voice_states = True
         intents.message_content = True
         
-        # Sukuriame klientą su mūsų intents
+        # Create client with our intents
         self.client = discord.Client(intents=intents)
         
-        # Registruojame event handler'ius
+        # Register event handlers
         @self.client.event
         async def on_ready():
-            self.logger.info(f'Discord prisijungė kaip {self.client.user}')
+            self.logger.info(f'Discord connected as {self.client.user}')
             await self.connect_to_voice()
         
         @self.client.event
         async def on_voice_state_update(member, before, after):
-            # Kai pasikeičia mūsų buvimas voice kanale
+            # When our presence in the voice channel changes
             if member.id == self.client.user.id:
-                # Atnaujiname būseną
+                # Update state
                 if after.channel is None:
                     self.connected = False
-                    self.logger.info('Atsijungta nuo voice kanalo')
+                    self.logger.info('Disconnected from voice channel')
                 else:
                     self.connected = True
                     self.muted = after.self_mute
                     self.deafened = after.self_deaf
-                    self.logger.info(f'Voice būsena atnaujinta: muted={self.muted}, deafened={self.deafened}')
+                    self.logger.info(f'Voice state updated: muted={self.muted}, deafened={self.deafened}')
     
     async def connect_to_voice(self):
-        """Prisijungia prie voice kanalo"""
+        """Connects to voice channel"""
         try:
-            # Randam kanalą pagal ID
+            # Find channel by ID
             channel = self.client.get_channel(int(self.channel_id))
             if not channel:
-                self.logger.error(f'Nepavyko rasti voice kanalo su ID {self.channel_id}')
+                self.logger.error(f'Failed to find voice channel with ID {self.channel_id}')
                 return
             
-            self.logger.info(f'Bandoma prisijungti prie voice kanalo: {channel.name}')
+            self.logger.info(f'Attempting to connect to voice channel: {channel.name}')
             
-            # Jei jau esame prisijungę prie kito kanalo, atsijungiame
+            # If already connected to another channel, disconnect
             if self.voice_client and self.voice_client.is_connected():
                 await self.voice_client.disconnect()
             
-            # Prisijungiame prie kanalo
+            # Connect to channel
             self.voice_client = await channel.connect()
             self.connected = True
-            self.logger.info(f'Prisijungta prie voice kanalo: {channel.name}')
+            self.logger.info(f'Connected to voice channel: {channel.name}')
             
-            # Nustatome pradinę būseną - muted ir deafened
+            # Set initial state - muted and deafened
             await self.voice_client.set_mute(True)
             await self.voice_client.set_deaf(True)
             self.muted = True
             self.deafened = True
         
         except Exception as e:
-            self.logger.error(f'Klaida jungiantis prie voice kanalo: {e}')
+            self.logger.error(f'Error connecting to voice channel: {e}')
     
     def start(self):
-        """Paleidžia Discord klientą atskirame thread'e"""
+        """Starts Discord client in a separate thread"""
         def run_client():
             try:
-                # Paleidžiame asynchroninį Discord klientą
+                # Run asynchronous Discord client
                 asyncio.run(self.client.start(self.token))
             except Exception as e:
-                self.logger.error(f'Klaida paleidžiant Discord klientą: {e}')
+                self.logger.error(f'Error starting Discord client: {e}')
         
-        # Pradedame naują thread'ą Discord klientui
+        # Start a new thread for Discord client
         self.thread = threading.Thread(target=run_client, daemon=True)
         self.thread.start()
-        self.logger.info('Discord klientas paleistas')
+        self.logger.info('Discord client started')
     
     def stop(self):
-        """Sustabdo Discord klientą"""
+        """Stops Discord client"""
         if self.client:
-            # Nustatome shutdown event, kad žinotume kada baigiame darbą
+            # Set shutdown event so we know when we're done
             self.shutdown_event.set()
             
-            # Sukuriame asynchroninę funkciją, kuri atsijungs nuo voice ir išjungs klientą
+            # Create asynchronous function that will disconnect from voice and close client
             async def shutdown():
                 if self.voice_client:
                     await self.voice_client.disconnect()
                 await self.client.close()
             
-            # Paleidžiame atsijungimo funkciją
+            # Run disconnect function
             try:
                 loop = asyncio.get_event_loop()
                 loop.run_until_complete(shutdown())
             except Exception as e:
-                self.logger.error(f'Klaida stabdant Discord klientą: {e}')
+                self.logger.error(f'Error stopping Discord client: {e}')
         
-        self.logger.info('Discord klientas sustabdytas')
+        self.logger.info('Discord client stopped')
     
     async def toggle_mute_async(self):
-        """Asynchroninė funkcija mikrofono perjungimui"""
+        """Asynchronous function for microphone toggling"""
         if not self.connected or not self.voice_client:
             return False
         
         try:
             self.muted = not self.muted
             await self.voice_client.set_mute(self.muted)
-            self.logger.info(f'Mikrofonas {"išjungtas" if self.muted else "įjungtas"}')
+            self.logger.info(f'Microphone {"disabled" if self.muted else "enabled"}')
             return True
         except Exception as e:
-            self.logger.error(f'Klaida perjungiant mikrofoną: {e}')
+            self.logger.error(f'Error toggling microphone: {e}')
             return False
     
     async def toggle_deafen_async(self):
-        """Asynchroninė funkcija garso perjungimui"""
+        """Asynchronous function for sound toggling"""
         if not self.connected or not self.voice_client:
             return False
         
         try:
             self.deafened = not self.deafened
             await self.voice_client.set_deaf(self.deafened)
-            self.logger.info(f'Garsas {"išjungtas" if self.deafened else "įjungtas"}')
+            self.logger.info(f'Sound {"disabled" if self.deafened else "enabled"}')
             return True
         except Exception as e:
-            self.logger.error(f'Klaida perjungiant garsą: {e}')
+            self.logger.error(f'Error toggling sound: {e}')
             return False
     
     def toggle_mute(self):
-        """Perjungia mikrofono būseną (skirta iškvietimui iš Flask)"""
+        """Toggles microphone state (for calling from Flask)"""
         if not self.connected:
-            return {"success": False, "message": "Neprisijungta prie voice kanalo"}
+            return {"success": False, "message": "Not connected to voice channel"}
         
-        # Sukuriame naują event loop'ą
+        # Create a new event loop
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(self.toggle_mute_async())
             if result:
                 return {"success": True, "muted": self.muted}
-            return {"success": False, "message": "Nepavyko perjungti mikrofono"}
+            return {"success": False, "message": "Failed to toggle microphone"}
         except Exception as e:
-            self.logger.error(f'Klaida: {e}')
+            self.logger.error(f'Error: {e}')
             return {"success": False, "message": str(e)}
         finally:
             loop.close()
     
     def toggle_deafen(self):
-        """Perjungia garso būseną (skirta iškvietimui iš Flask)"""
+        """Toggles sound state (for calling from Flask)"""
         if not self.connected:
-            return {"success": False, "message": "Neprisijungta prie voice kanalo"}
+            return {"success": False, "message": "Not connected to voice channel"}
         
-        # Sukuriame naują event loop'ą
+        # Create a new event loop
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(self.toggle_deafen_async())
             if result:
                 return {"success": True, "deafened": self.deafened}
-            return {"success": False, "message": "Nepavyko perjungti garso"}
+            return {"success": False, "message": "Failed to toggle sound"}
         except Exception as e:
-            self.logger.error(f'Klaida: {e}')
+            self.logger.error(f'Error: {e}')
             return {"success": False, "message": str(e)}
         finally:
             loop.close()
     
     def get_status(self):
-        """Grąžina dabartinę būseną"""
+        """Returns current state"""
         return {
             "connected": self.connected,
             "muted": self.muted,
