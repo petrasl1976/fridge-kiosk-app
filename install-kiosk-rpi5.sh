@@ -312,6 +312,12 @@ echo "   2. Select 'Copy ID'"
 echo "   3. Paste into .env file (DISCORD_CHANNEL_ID and DISCORD_VOICE_CHANNEL_ID)"
 echo "   Note: You must enable 'Developer Mode' in Discord settings"
 echo
+echo "   Grant access and start the app:"
+echo "   ssh -A -L 8080:localhost:8080 kiosk@192.168.88.104"
+echo "   open in browser: http://localhost:8080"
+echo "   grant access to the app"
+echo "   restart kiosk service: sudo systemctl restart kiosk"
+echo
 echo "4. Temperature monitoring:"
 echo "   - System will automatically monitor CPU temperature"
 echo "   - When temperature exceeds 65°C, system will temporarily switch to photo mode only"
