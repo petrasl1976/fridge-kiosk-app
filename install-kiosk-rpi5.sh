@@ -1,50 +1,48 @@
 #!/bin/bash
 
-echo "Šaldytuvo ekrano diegimo skriptas"
-echo "Reikalavimai:"
-echo "- Raspberry Pi OS Lite"
-echo "- Prijungtas vertikalus ekranas"
-echo "- Interneto ryšys"
-echo "----------------------------------------"
+echo "=================================================="
+echo "        FRIDGE KIOSK INSTALLATION SCRIPT          "
+echo "=================================================="
 echo
+echo "REQUIREMENTS:"
+echo "  • Raspberry Pi OS Lite (latest version recommended)"
+echo "  • Connected vertical screen"
+echo "  • Internet connection"
+echo "  • User 'kiosk' should be created before installation"
+echo
+echo "USAGE:"
+echo "  • Run this script with sudo: sudo ./install-kiosk-rpi5.sh"
+echo "  • You can run this script multiple times if needed - it's safe!"
+echo
+echo "IMPORTANT: This script will create necessary services, create 'kiosk' user"
+echo "           (if it doesn't exist), and prepare the system. If you use a different"
+echo "           user, you'll need to manually adjust service files."
+echo "=================================================="
+echo
+echo "Press ENTER to continue or CTRL+C to cancel..."
+read
 
-# Patikrinkime ar paleista su sudo
+# Check if running with sudo
 if [ "$(id -u)" -ne 0 ]; then 
-    echo "Paleiskite su sudo"
+    echo "ERROR: Run this script with sudo"
     exit 1
 fi
 
-# Parametrų apdorojimas
-CLEAR_APP=0
-while getopts "c" opt; do
-    case $opt in
-        c)
-            CLEAR_APP=1
-            ;;
-        \?)
-            echo "Nežinomas parametras: -$OPTARG"
-            echo "Galimi parametrai:"
-            echo "  -c    Išvalyti aplikacijos direktoriją ir perdiegti iš naujo"
-            exit 1
-            ;;
-    esac
-done
-
-# Funkcija Python virtualios aplinkos sukūrimui ir modulių įdiegimui
+# Function for creating Python virtual environment and installing modules
 setup_python_env() {
     local app_dir=$1
     
-    echo "Kuriu virtualią aplinką ir nustatau teises..."
+    echo "Creating virtual environment and setting permissions..."
     cd "$app_dir"
     python3 -m venv venv
     
-    # Nustatome teises virtualiai aplinkai
+    # Set permissions for the virtual environment
     chown -R kiosk:kiosk "$app_dir/venv"
     chmod -R 755 "$app_dir/venv/bin"
-    # Užtikriname, kad visi failai bin kataloge būtų vykdomi
+    # Ensure all files in bin directory are executable
     chmod +x "$app_dir/venv/bin/"*
     
-    echo "Įdiegiu reikalingus Python modulius..."
+    echo "Installing required Python modules..."
     sudo -u kiosk "$app_dir/venv/bin/pip" install --no-cache-dir flask \
         google-auth-oauthlib \
         google-auth-httplib2 \
@@ -59,7 +57,7 @@ setup_python_env() {
         PyNaCl
 }
 
-echo "Tikrinu ir diegiu reikalingus paketus..."
+echo "Checking and installing required packages..."
 PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr"
 NEW_PACKAGES=""
 
@@ -70,14 +68,14 @@ for pkg in $PACKAGES; do
 done
 
 if [ ! -z "$NEW_PACKAGES" ]; then
-    echo "Diegiu trūkstamus paketus:$NEW_PACKAGES"
+    echo "Installing missing packages:$NEW_PACKAGES"
     apt update
     apt install -y $NEW_PACKAGES
 else
-    echo "Visi reikalingi paketai jau įdiegti"
+    echo "All required packages already installed"
 fi
 
-echo "Kuriu seat grupę ir kiosk vartotoją..."
+echo "Creating seat group and kiosk user..."
 groupadd -f seat
 groupadd -f render
 if ! id "kiosk" &>/dev/null; then
@@ -85,33 +83,33 @@ if ! id "kiosk" &>/dev/null; then
 fi
 usermod -aG video,input,seat,render,tty kiosk
 
-# Nustatome DRM teises (perrašome taisykles, saugu daryti kelis kartus)
+# Set DRM permissions (overwrite rules, safe to do multiple times)
 echo 'SUBSYSTEM=="drm", ACTION=="add", MODE="0660", GROUP="video"' > /etc/udev/rules.d/99-drm.rules
 echo 'KERNEL=="renderD128", SUBSYSTEM=="drm", MODE="0666"' > /etc/udev/rules.d/99-renderD128.rules
 udevadm control --reload-rules
 udevadm trigger
 
-echo "Įjungiu seatd servisą..."
+echo "Enabling seatd service..."
 systemctl enable --now seatd
 
-echo "Ruošiu Python aplinką..."
-# Gauname esamo projekto direktoriją (ji turėtų būti ta, kurioje dabar esame)
+echo "Preparing Python environment..."
+# Get current project directory (should be where we are now)
 CURRENT_DIR="$(pwd)"
 KIOSK_APP_DIR="$CURRENT_DIR"
 
-# Tikriname, ar yra svarbūs konfigūracijos failai
+# Check if important configuration files exist
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
-    echo "Neradau .env failo, kuriu iš pavyzdžio..."
+    echo "Could not find .env file, creating from example..."
     cp .env.example .env
-    echo "Sukurtas .env failas. Būtinai pakeiskite nustatymus pagal savo poreikius."
+    echo "Created .env file. Make sure to update settings according to your needs."
 fi
 
 if [ ! -f "client_secret.json" ]; then
-    echo "ĮSPĖJIMAS: Nerastas client_secret.json failas!"
-    echo "Jums reikės sukurti Google API projekto kredencialus ir įkelti client_secret.json failą."
+    echo "WARNING: client_secret.json file not found!"
+    echo "You will need to create Google API project credentials and upload client_secret.json file."
 fi
 
-# Sukuriame tuščius failus, reikalingus darbui, jei jų nėra
+# Create empty files needed for operation, if they don't exist
 if [ ! -f "albums_cache.json" ]; then
     touch albums_cache.json
 fi
@@ -120,13 +118,13 @@ if [ ! -f "log.log" ]; then
     touch log.log
 fi
 
-# Sukuriame virtualią aplinką
+# Create virtual environment
 setup_python_env "$KIOSK_APP_DIR"
 
-# Atnaujiname shebang
+# Update shebang
 sed -i "1c #!$KIOSK_APP_DIR/venv/bin/python3" "$KIOSK_APP_DIR/app.py"
 
-# Nustatome teises
+# Set permissions
 chown -R kiosk:kiosk "$KIOSK_APP_DIR"
 find "$KIOSK_APP_DIR" -type f -exec chmod 644 {} \;
 find "$KIOSK_APP_DIR" -type d -exec chmod 755 {} \;
@@ -139,28 +137,28 @@ chmod +x "$KIOSK_APP_DIR/app.py"
 chmod 666 "$KIOSK_APP_DIR/albums_cache.json"
 chmod 666 "$KIOSK_APP_DIR/log.log"
 
-# Užtikriname, kad Python moduliai turi teisingas teises
+# Ensure Python modules have correct permissions
 chmod 644 "$KIOSK_APP_DIR/temp_monitor.py" 
-chmod 644 "$KIOSK_APP_DIR/discord_voice.py"
+if [ -f "$KIOSK_APP_DIR/discord_voice.py" ]; then
+    chmod 644 "$KIOSK_APP_DIR/discord_voice.py"
+fi
 
-
-
-echo "Kuriu paleidimo skriptą..."
+echo "Creating startup script..."
 cat > /home/kiosk/start-kiosk.sh << 'EOL'
 #!/bin/bash
 
-# Nustatome XDG_RUNTIME_DIR, kurio trūko anksčiau
+# Set XDG_RUNTIME_DIR, which was missing before
 export XDG_RUNTIME_DIR=/tmp/xdg-runtime-dir
 mkdir -p $XDG_RUNTIME_DIR
 chmod 700 $XDG_RUNTIME_DIR
 
-# Paleidžiame dbus sesiją
+# Start dbus session
 if [ ! -e "$XDG_RUNTIME_DIR/bus" ]; then
     dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --nofork --nopidfile --syslog-only &
     sleep 1
 fi
 
-# Paleidžiame cage ir chromium
+# Start cage and chromium
 cage -d -- chromium-browser \
     --kiosk \
     --disable-gpu \
@@ -175,33 +173,33 @@ cage -d -- chromium-browser \
     --disable-notifications \
     http://localhost:8080 &
 
-# Laukiame kol cage pasileis ir sukurs Wayland sesiją
+# Wait for cage to start and create Wayland session
 sleep 5
 
-# Tikrinkime kokie monitoriai yra prijungti ir pasukame ekraną
+# Check which monitors are connected and rotate the screen
 OUTPUT=$(wlr-randr | grep -o -m 1 "^HDMI-[A-Za-z0-9\-]*")
 if [ -n "$OUTPUT" ]; then
-    echo "Rastas monitorius: $OUTPUT"
+    echo "Found monitor: $OUTPUT"
     for i in {1..3}; do
         if wlr-randr --output "$OUTPUT" --transform 270; then
-            echo "Ekranas pasuktas sėkmingai"
+            echo "Screen rotated successfully"
             break
         fi
         sleep 2
     done
 else
-    echo "Monitorius nerastas"
+    echo "Monitor not found"
 fi
 
-# Laukiame pagrindinio proceso
+# Wait for main process
 wait
 EOL
 
-echo "Nustatau teises paleidimo skriptui..."
+echo "Setting permissions for startup script..."
 chmod +x /home/kiosk/start-kiosk.sh
 chown kiosk:kiosk /home/kiosk/start-kiosk.sh
 
-echo "Kuriu servisų failus..."
+echo "Creating service files..."
 cat > /etc/systemd/system/fridge-app.service << EOL
 [Unit]
 Description=Fridge Flask Application
@@ -212,7 +210,7 @@ User=kiosk
 WorkingDirectory=$KIOSK_APP_DIR
 Environment="PATH=$KIOSK_APP_DIR/venv/bin"
 ExecStart=$KIOSK_APP_DIR/venv/bin/python app.py
-# Suteikiame daugiau teisių, kad galėtume skaityti temperatūros duomenis
+# Give more permissions to read temperature data
 ReadWritePaths=/sys/class/thermal/thermal_zone0
 ProtectSystem=true
 Restart=always
@@ -253,57 +251,57 @@ Restart=always
 WantedBy=multi-user.target
 EOL
 
-echo "Perkraunu systemd..."
+echo "Reloading systemd..."
 systemctl daemon-reload
 
-echo "Įjungiu servisus..."
+echo "Enabling services..."
 systemctl enable fridge-app.service
 systemctl enable kiosk.service
 
-echo "Diegimas baigtas!"
+echo "Installation complete!"
 echo
-echo "Instrukcijos:"
+echo "Instructions:"
 echo
-echo "1. Servisų valdymas:"
+echo "1. Service management:"
 echo "   sudo systemctl restart fridge-app.service"
 echo "   sudo systemctl restart kiosk.service"
 echo
-echo "2. Logų peržiūra:"
+echo "2. Log viewing:"
 echo "   sudo journalctl -fu fridge-app.service"
 echo "   sudo journalctl -fu kiosk.service"
 echo
-echo "3. Konfigūracija:"
-echo "   - Slapti parametrai (.env failas): API raktai, tokenai ir kiti slapti duomenys"
-echo "   - Visi kiti parametrai (config.py failas): rodymo trukmė, rodymo tipai, temperatūros ribos"
+echo "3. Configuration:"
+echo "   - Secret parameters (.env file): API keys, tokens and other secret data"
+echo "   - All other parameters (config.py file): display duration, display types, temperature limits"
 echo
-echo "   INSTRUKCIJA client_secret.json gavimui:"
-echo "   1. Atidarykite https://console.cloud.google.com"
-echo "   2. Sukurkite naują projektą"
-echo "   3. Įjunkite Google Calendar API ir Google Photos Library API"
-echo "   4. Menu: 'API ir paslaugos' -> 'Kredencialai'"
-echo "   5. Sukurkite OAuth kliento ID ('Sukurti kredencialus' -> 'OAuth kliento ID')"
-echo "   6. Pasirinkite tipą 'Darbalaukio programa' ir atsisiųskite JSON"
-echo "   7. Pervadinkite failą į 'client_secret.json' ir įkelkite į fridge-kiosk-app aplanką"
+echo "   INSTRUCTIONS for obtaining client_secret.json:"
+echo "   1. Open https://console.cloud.google.com"
+echo "   2. Create a new project"
+echo "   3. Enable Google Calendar API and Google Photos Library API"
+echo "   4. Menu: 'APIs & Services' -> 'Credentials'"
+echo "   5. Create OAuth client ID ('Create credentials' -> 'OAuth client ID')"
+echo "   6. Select type 'Desktop application' and download JSON"
+echo "   7. Rename file to 'client_secret.json' and upload to fridge-kiosk-app folder"
 echo
-echo "   INSTRUKCIJA kalendoriaus ID gavimui:"
-echo "   1. Atidarykite https://calendar.google.com"
-echo "   2. Raskite savo kalendorių kairėje, trys taškai -> 'Nustatymai'"
-echo "   3. Suraskite 'Kalendoriaus ID' ir nukopijuokite į .env failą (FAMILY_CALENDAR_ID=...)"
+echo "   INSTRUCTIONS for obtaining calendar ID:"
+echo "   1. Open https://calendar.google.com"
+echo "   2. Find your calendar on the left, three dots -> 'Settings'"
+echo "   3. Find 'Calendar ID' and copy to .env file (FAMILY_CALENDAR_ID=...)"
 echo
-echo "   INSTRUKCIJA Discord kanalų ID gavimui:"
-echo "   1. Discord programoje dešiniu pelės mygtuku paspauskite ant kanalo"
-echo "   2. Pasirinkite 'Kopijuoti kanalo ID'"
-echo "   3. Įklijuokite į .env failą (DISCORD_CHANNEL_ID ir DISCORD_VOICE_CHANNEL_ID)"
-echo "   Pastaba: Discord programoje būtina įjungti 'Kūrėjo režimą' nustatymuose"
+echo "   INSTRUCTIONS for obtaining Discord channel IDs:"
+echo "   1. In Discord app, right-click on the channel"
+echo "   2. Select 'Copy ID'"
+echo "   3. Paste into .env file (DISCORD_CHANNEL_ID and DISCORD_VOICE_CHANNEL_ID)"
+echo "   Note: You must enable 'Developer Mode' in Discord settings"
 echo
-echo "4. Temperatūros stebėjimas:"
-echo "   - Sistema automatiškai stebės CPU temperatūrą"
-echo "   - Kai temperatūra viršys 65°C, sistema laikinai perjungs tik į foto režimą"
+echo "4. Temperature monitoring:"
+echo "   - System will automatically monitor CPU temperature"
+echo "   - When temperature exceeds 65°C, system will temporarily switch to photo mode only"
 echo
-echo "5. Discord balsas:"
-echo "   - Įsitikinkite, kad .env faile nustatyti DISCORD_BOT_TOKEN ir DISCORD_VOICE_CHANNEL_ID"
-echo "   - Mikrofono ir garsiakalbio būseną galima konfigūruoti config.py faile (MIC_ENABLED ir SOUND_ENABLED parametrai)"
+echo "5. Discord voice:"
+echo "   - Make sure DISCORD_BOT_TOKEN and DISCORD_VOICE_CHANNEL_ID are set in .env file"
+echo "   - Microphone and speaker status can be configured in config.py file (MIC_ENABLED and SOUND_ENABLED parameters)"
 echo
-echo "SVARBU: Po pirmos instaliacijos perkraukite sistemą (sudo reboot)"
+echo "IMPORTANT: After first installation, restart the system (sudo reboot)"
 
 exit 0 
