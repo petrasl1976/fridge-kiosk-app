@@ -25,6 +25,15 @@ googleapiclient.discovery_cache.LOGGER.setLevel(logging.ERROR)
 werkzeug_logger = logging.getLogger('werkzeug')
 werkzeug_logger.setLevel(logging.WARNING)  # Show only WARNING and higher level messages
 
+# Configure media display logger
+media_logger = logging.getLogger('media_display')
+media_logger.setLevel(logging.INFO)
+
+# Create file handler for media display logger
+media_handler = logging.FileHandler('media_display.log')
+media_handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s', '%Y.%m.%d %H:%M:%S'))
+media_logger.addHandler(media_handler)
+
 import broadlink
 from config import Config
 from temp_monitor import TemperatureMonitor
@@ -464,18 +473,19 @@ def index():
     )
 
 @app.route('/newphoto')
-def newphoto():
-    creds_data = session.get('credentials')
-    if not creds_data:
-        return jsonify({"error": "No credentials in session"}), 403
-
+def new_photo():
+    """Returns a new batch of photos in JSON format"""
     try:
-        creds = google.oauth2.credentials.Credentials(**creds_data)
-        photos_service = googleapiclient.discovery.build(
-            'photoslibrary', 'v1', credentials=creds,
-            discoveryServiceUrl='https://photoslibrary.googleapis.com/$discovery/rest?version=v1'
-        )
-
+        if 'credentials' not in session:
+            return jsonify({"error": "Not authenticated"}), 401
+            
+        # Load credentials from the session.
+        creds = google.oauth2.credentials.Credentials(**session['credentials'])
+        # Save credentials back to the session
+        session['credentials'] = credentials_to_dict(creds)
+        
+        photos_service = googleapiclient.discovery.build('photoslibrary', 'v1', credentials=creds)
+        
         photo_batch, album_title = get_random_photo_batch(photos_service)
         
         # Check if photo_batch is None or has an error message
@@ -485,7 +495,14 @@ def newphoto():
         # If the first element has an error field, return the error message but with 200 status
         if 'error' in photo_batch[0]:
             return jsonify({"error": photo_batch[0]['error'], "photos": photo_batch, "album_title": album_title})
-
+            
+        # Log the first photo/video in the batch that will be displayed
+        if photo_batch and len(photo_batch) > 0:
+            first_item = photo_batch[0]
+            media_type = first_item.get('mediaType', 'unknown')
+            filename = first_item.get('filename', 'unknown')
+            media_logger.info(f"[{album_title}] {filename} ({media_type})")
+            
         return jsonify({"photos": photo_batch, "album_title": album_title})
         
     except Exception as e:
@@ -743,6 +760,26 @@ def voice_status():
             
     except Exception as e:
         app.logger.error(f"Error in voice_status: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/log_media_display', methods=['POST'])
+def log_media_display():
+    """Logs when a media item is displayed on screen"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"success": False, "message": "No data provided"}), 400
+            
+        album = data.get('album', 'Unknown Album')
+        filename = data.get('filename', 'Unknown File')
+        media_type = data.get('mediaType', 'unknown')
+        
+        # Log in specified format
+        media_logger.info(f"[{album}] {filename} ({media_type})")
+        
+        return jsonify({"success": True})
+    except Exception as e:
+        app.logger.error(f"Error logging media display: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
 # Register shutdown function

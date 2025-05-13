@@ -57,6 +57,9 @@ function showMedia(m) {
 
   // Išvalome seną mediją
   display.innerHTML = '';
+  
+  // Log displayed media to server
+  logMediaDisplay(m);
 
   if (m.mediaType === "video") {
     // Sukuriame video elementą
@@ -144,6 +147,26 @@ function showMedia(m) {
   if (m.mediaType !== "video") {
     startProgressBar();
   }
+}
+
+// New function to log displayed media to server
+function logMediaDisplay(mediaItem) {
+  // Don't log error items
+  if (mediaItem.mediaType === "error" || !mediaItem.filename) return;
+  
+  fetch('/log_media_display', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      album: currentAlbum,
+      filename: mediaItem.filename,
+      mediaType: mediaItem.mediaType,
+      timestamp: new Date().toISOString()
+    })
+  })
+  .catch(error => console.error('Error logging media display:', error));
 }
 
 function updatePhotoBatch() {
