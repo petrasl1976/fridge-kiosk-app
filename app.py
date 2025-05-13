@@ -762,6 +762,17 @@ def voice_status():
         app.logger.error(f"Error in voice_status: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+def credentials_to_dict(credentials):
+    """Convert Google Credentials object to a dictionary."""
+    return {
+        'token': credentials.token,
+        'refresh_token': credentials.refresh_token,
+        'token_uri': credentials.token_uri,
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret,
+        'scopes': credentials.scopes
+    }
+
 @app.route('/log_media_display', methods=['POST'])
 def log_media_display():
     """Logs when a media item is displayed on screen"""
