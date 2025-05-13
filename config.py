@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-# Įkrauname .env failą
+# Load .env file
 load_dotenv()
 
 class Config:
@@ -9,9 +9,9 @@ class Config:
     FAMILY_CALENDAR_ID = os.getenv("FAMILY_CALENDAR_ID")
     EVENT_SUMMARY_MAX_LENGTH = 30
     PHOTO_DURATION = 30           # s
-    VIDEO_DURATION = 60           # s - maksimali video rodymo trukmė
-    MEDIA_TYPES = "all"           # Kokio tipo media rodyti: "photo", "video" arba "all"
-    VIDEO_SOUND = True            # Ar leisti video garsą
+    VIDEO_DURATION = 60           # s - maximum video display duration
+    MEDIA_TYPES = "all"           # Media types to show: "photo", "video" or "all"
+    VIDEO_SOUND = True            # Allow video sound
     PHOTO_BATCH_COUNT = 5
     WEEKS_TO_SHOW = 5
     SHOW_HOLIDAYS = True
@@ -27,19 +27,19 @@ class Config:
     DEFAULT_EVENT_COLOR = "#000000"
 
     HOLIDAYS = {
-        "2025-01-01": "Naujųjų metų diena",
-        "2025-02-16": "Valstybės atkūrimo diena",
-        "2025-03-11": "Lietuvos Nepriklausomybės atkūrimo diena",
-        "2025-04-20": "Šv. Velykos",
-        "2025-04-21": "Šv. Velykų antroji diena",
-        "2025-05-01": "Tarptautinė darbo diena",
-        "2025-06-24": "Rasos ir Joninių diena",
-        "2025-07-06": "Valstybės (Mindaugo karūnavimo) diena",
-        "2025-08-15": "Žolinė (Švč. Mergelės Marijos ėmimo į dangų diena)",
-        "2025-11-01": "Visų šventųjų diena",
-        "2025-12-24": "Šv. Kūčios",
-        "2025-12-25": "Šv. Kalėdos (pirma diena)",
-        "2025-12-26": "Šv. Kalėdos (antra diena)"
+        "2025-01-01": "New Year's Day",
+        "2025-02-16": "Independence Day",
+        "2025-03-11": "Restoration of Lithuania's Independence Day",
+        "2025-04-20": "Easter Sunday",
+        "2025-04-21": "Easter Monday",
+        "2025-05-01": "International Labor Day",
+        "2025-06-24": "St. John's Day (Midsummer)",
+        "2025-07-06": "Statehood Day (Coronation of King Mindaugas)",
+        "2025-08-15": "Assumption Day",
+        "2025-11-01": "All Saints' Day",
+        "2025-12-24": "Christmas Eve",
+        "2025-12-25": "Christmas Day",
+        "2025-12-26": "Boxing Day"
     }
 
     METEO_API_BASE_URL = "https://api.meteo.lt/v1"
@@ -56,8 +56,8 @@ class Config:
         "CHANNEL_ID": os.getenv("DISCORD_CHANNEL_ID"),
         "VOICE_CHANNEL_ID": os.getenv("DISCORD_VOICE_CHANNEL_ID"),
         "MESSAGE_COUNT": 10,
-        "MIC_ENABLED": False,   # Mikrofono būsena: True - įjungtas, False - išjungtas
-        "SOUND_ENABLED": True   # Garso būsena: True - įjungtas, False - išjungtas
+        "MIC_ENABLED": False,   # Microphone state: True - enabled, False - disabled
+        "SOUND_ENABLED": True   # Sound state: True - enabled, False - disabled
     }
 
     BROADLINK = {
@@ -65,7 +65,7 @@ class Config:
         "TARGET_TYPE_PREFIX": "RM4",
     }
 
-    # Overlay parametrai
+    # Overlay parameters
     PHOTO_CONTAINER = {
         "top": "0%",
         "left": "0%",
@@ -125,20 +125,20 @@ class Config:
         "background": "rgba(0, 0, 0, 0)",
         "color": "#fff",
         "padding": "10px",
-        "clock_font_size": "7.2em",     # Vos didesnis laikrodžio šriftas
+        "clock_font_size": "7.2em",     # Slightly larger font size for clock
         "date_font_size": "3.5em",
         "events_font_size": "1.5em",
-        "sensor_font_size": "1.8em"     # CPU: čia galite keisti sensoriaus duomenų šrifto dydį
+        "sensor_font_size": "1.8em"     # CPU: you can change sensor data font size here
     }
 
-    # Temperatūros stebėjimo nustatymai
-    TEMP_MONITORING = True          # Ar įjungtas CPU temperatūros stebėjimas
-    TEMP_WARNING = 65               # Temperatūra (°C), kurią pasiekus perjungiama į foto režimą
-    TEMP_CRITICAL = 80              # Kritinė temperatūra (°C), kurią pasiekus restartuojamas įrenginys
-    TEMP_RECOVERY = 60              # Temperatūra (°C), kuriai nukritus galima grįžti į normalų režimą
-    TEMP_CHECK_INTERVAL = 10        # Tikrinimo intervalas (sekundėmis)
+    # Temperature monitoring settings
+    TEMP_MONITORING = True          # Enable CPU temperature monitoring
+    TEMP_WARNING = 65               # Temperature (°C) at which to switch to photo mode
+    TEMP_CRITICAL = 80              # Critical temperature (°C) at which to restart device
+    TEMP_RECOVERY = 60              # Temperature (°C) below which to return to normal mode
+    TEMP_CHECK_INTERVAL = 10        # Check interval (seconds)
     
-    # Voice overlay nustatymai
+    # Voice overlay settings
     VOICE_OVERLAY = {
         "top": "2%",
         "left": "80%",
