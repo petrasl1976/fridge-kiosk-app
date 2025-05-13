@@ -55,39 +55,79 @@ function showMedia(m) {
   const display = document.getElementById('photo-display');
   if (!display) return;
 
-  // Išvalome seną nuotrauką
+  // Išvalome seną mediją
   display.innerHTML = '';
 
-  // Sukuriame naują <img>
-  let imgEl = document.createElement('img');
-  imgEl.id = 'current-photo';
-  imgEl.src = m.baseUrl + "=w1200-h800"; // reikiamo dydžio parametrai
-  imgEl.style.position = 'absolute';
-  imgEl.style.left = '50%';
-  imgEl.style.transform = 'translateX(-50%)';
-  imgEl.style.objectFit = 'contain';
-  imgEl.style.margin = 0;
+  if (m.mediaType === "video") {
+    // Sukuriame video elementą
+    let videoEl = document.createElement('video');
+    videoEl.id = 'current-video';
+    videoEl.src = m.baseUrl;
+    videoEl.style.position = 'absolute';
+    videoEl.style.left = '50%';
+    videoEl.style.transform = 'translateX(-50%)';
+    videoEl.style.objectFit = 'contain';
+    videoEl.style.margin = 0;
+    videoEl.style.maxWidth = '100%';
+    videoEl.style.maxHeight = '100%';
+    videoEl.style.bottom = '0';
+    
+    // Video atributai
+    videoEl.controls = false; // Slėpti video kontroles
+    videoEl.autoplay = true;
+    videoEl.muted = !window.VIDEO_SOUND; // Pagal konfiguraciją
+    videoEl.playsInline = true;
+    
+    // Kai video baigsis, keičiame į sekančią mediją
+    videoEl.onended = function() {
+      clearInterval(progressIntervalId); // Sustabdome progreso juostą
+      nextMedia();
+    };
+    
+    // Jei video ilgesnis nei nustatyta, nustatome laikmatį
+    videoEl.onloadedmetadata = function() {
+      let duration = videoEl.duration;
+      if (duration > window.VIDEO_DURATION) {
+        setTimeout(() => {
+          clearInterval(progressIntervalId);
+          nextMedia();
+        }, window.VIDEO_DURATION * 1000);
+      }
+    };
+    
+    display.appendChild(videoEl);
+  } else {
+    // Sukuriame naują <img> elementą nuotraukai
+    let imgEl = document.createElement('img');
+    imgEl.id = 'current-photo';
+    imgEl.src = m.baseUrl + "=w1200-h800"; // reikiamo dydžio parametrai
+    imgEl.style.position = 'absolute';
+    imgEl.style.left = '50%';
+    imgEl.style.transform = 'translateX(-50%)';
+    imgEl.style.objectFit = 'contain';
+    imgEl.style.margin = 0;
 
-  // Kai paveikslas užsikraus, nustatome, ar plotis, ar aukštis turi tilpti
-  imgEl.onload = function() {
-    let w = imgEl.naturalWidth;
-    let h = imgEl.naturalHeight;
-    if (h > w) {
-      // Vertikali nuotrauka
-      imgEl.style.height = '100%';
-      imgEl.style.width = 'auto';
-      imgEl.style.top = '0';
-      imgEl.style.bottom = '0';
-    } else {
-      // Horizontali
-      imgEl.style.width = '100%';
-      imgEl.style.height = 'auto';
-      imgEl.style.bottom = '0';
-      imgEl.style.top = 'auto';
-    }
-  };
+    // Kai paveikslas užsikraus, nustatome, ar plotis, ar aukštis turi tilpti
+    imgEl.onload = function() {
+      let w = imgEl.naturalWidth;
+      let h = imgEl.naturalHeight;
+      if (h > w) {
+        // Vertikali nuotrauka
+        imgEl.style.height = '100%';
+        imgEl.style.width = 'auto';
+        imgEl.style.top = '0';
+        imgEl.style.bottom = '0';
+      } else {
+        // Horizontali
+        imgEl.style.width = '100%';
+        imgEl.style.height = 'auto';
+        imgEl.style.bottom = '0';
+        imgEl.style.top = 'auto';
+      }
+    };
 
-  display.appendChild(imgEl);
+    display.appendChild(imgEl);
+  }
 
   // Parodome informacijos overlay (albumo pavadinimas, data, kiek liko nuotraukų)
   let remain = currentBatch.length - (currentIndex + 1);
@@ -95,8 +135,14 @@ function showMedia(m) {
   if (overlay) {
     let text = currentAlbum + "<br>" 
              + m.photo_time.replace("T", " ").replace("Z", "") 
-             + " (liko #" + remain + ")";
+             + " (liko #" + remain + ")"
+             + (m.mediaType === "video" ? " 📹" : "");
     overlay.innerHTML = text;
+  }
+  
+  // Paleiskime progreso juostą tik nuotraukoms (video turi savo progresą)
+  if (m.mediaType !== "video") {
+    startProgressBar();
   }
 }
 
