@@ -2,6 +2,7 @@ import discord
 import logging
 import asyncio
 import threading
+import traceback
 
 class DiscordVoiceClient:
     def __init__(self, token, channel_id):
@@ -24,6 +25,9 @@ class DiscordVoiceClient:
         intents.voice_states = True
         intents.message_content = True
         
+        self.logger.info(f"Initializing Discord client with channel ID: {channel_id}")
+        self.logger.info(f"Bot token length: {len(token) if token else 0}")
+        
         # Create client with our intents
         self.client = discord.Client(intents=intents)
         
@@ -31,6 +35,7 @@ class DiscordVoiceClient:
         @self.client.event
         async def on_ready():
             self.logger.info(f'Discord connected as {self.client.user}')
+            self.logger.info(f'Attempting to connect to voice channel ID: {self.channel_id}')
             await self.connect_to_voice()
         
         @self.client.event
@@ -51,15 +56,27 @@ class DiscordVoiceClient:
         """Connects to voice channel"""
         try:
             # Find channel by ID
+            self.logger.info(f"Looking for channel with ID: {self.channel_id}")
             channel = self.client.get_channel(int(self.channel_id))
+            
+            if not channel:
+                # Try to get channel by ID via fetch_channel
+                try:
+                    self.logger.info("Channel not found via get_channel, trying fetch_channel...")
+                    channel = await self.client.fetch_channel(int(self.channel_id))
+                except Exception as fetch_error:
+                    self.logger.error(f"Failed to fetch channel: {fetch_error}")
+                    
             if not channel:
                 self.logger.error(f'Failed to find voice channel with ID {self.channel_id}')
                 return
             
+            self.logger.info(f'Found channel: {channel.name} (Type: {channel.type})')
             self.logger.info(f'Attempting to connect to voice channel: {channel.name}')
             
             # If already connected to another channel, disconnect
             if self.voice_client and self.voice_client.is_connected():
+                self.logger.info("Already connected to a channel, disconnecting first...")
                 await self.voice_client.disconnect()
             
             # Connect to channel
@@ -75,110 +92,150 @@ class DiscordVoiceClient:
         
         except Exception as e:
             self.logger.error(f'Error connecting to voice channel: {e}')
+            self.logger.error(f'Traceback: {traceback.format_exc()}')
     
     def start(self):
         """Starts Discord client in a separate thread"""
         def run_client():
             try:
+                self.logger.info("Starting Discord client...")
                 # Run asynchronous Discord client
                 asyncio.run(self.client.start(self.token))
             except Exception as e:
                 self.logger.error(f'Error starting Discord client: {e}')
+                self.logger.error(f'Traceback: {traceback.format_exc()}')
         
         # Start a new thread for Discord client
         self.thread = threading.Thread(target=run_client, daemon=True)
         self.thread.start()
-        self.logger.info('Discord client started')
+        self.logger.info('Discord client started in separate thread')
     
     def stop(self):
         """Stops Discord client"""
         if self.client:
             # Set shutdown event so we know when we're done
+            self.logger.info("Shutting down Discord client...")
             self.shutdown_event.set()
             
             # Create asynchronous function that will disconnect from voice and close client
             async def shutdown():
                 if self.voice_client:
-                    await self.voice_client.disconnect()
-                await self.client.close()
+                    self.logger.info("Disconnecting from voice channel...")
+                    try:
+                        await self.voice_client.disconnect()
+                        self.logger.info("Successfully disconnected from voice channel")
+                    except Exception as e:
+                        self.logger.error(f"Error disconnecting from voice: {e}")
+                
+                self.logger.info("Closing Discord client...")
+                try:
+                    await self.client.close()
+                    self.logger.info("Discord client closed successfully")
+                except Exception as e:
+                    self.logger.error(f"Error closing Discord client: {e}")
             
             # Run disconnect function
             try:
+                self.logger.info("Creating event loop for shutdown...")
                 loop = asyncio.get_event_loop()
                 loop.run_until_complete(shutdown())
+                self.logger.info("Shutdown completed via event loop")
             except Exception as e:
                 self.logger.error(f'Error stopping Discord client: {e}')
+                self.logger.error(f'Traceback: {traceback.format_exc()}')
         
         self.logger.info('Discord client stopped')
     
     async def toggle_mute_async(self):
         """Asynchronous function for microphone toggling"""
         if not self.connected or not self.voice_client:
+            self.logger.warning("Cannot toggle mute: not connected to voice channel")
             return False
         
         try:
+            self.logger.info(f"Toggling microphone from {self.muted} to {not self.muted}")
             self.muted = not self.muted
             await self.voice_client.set_mute(self.muted)
             self.logger.info(f'Microphone {"disabled" if self.muted else "enabled"}')
             return True
         except Exception as e:
             self.logger.error(f'Error toggling microphone: {e}')
+            self.logger.error(f'Traceback: {traceback.format_exc()}')
             return False
     
     async def toggle_deafen_async(self):
         """Asynchronous function for sound toggling"""
         if not self.connected or not self.voice_client:
+            self.logger.warning("Cannot toggle deafen: not connected to voice channel")
             return False
         
         try:
+            self.logger.info(f"Toggling sound from {self.deafened} to {not self.deafened}")
             self.deafened = not self.deafened
             await self.voice_client.set_deaf(self.deafened)
             self.logger.info(f'Sound {"disabled" if self.deafened else "enabled"}')
             return True
         except Exception as e:
             self.logger.error(f'Error toggling sound: {e}')
+            self.logger.error(f'Traceback: {traceback.format_exc()}')
             return False
     
     def toggle_mute(self):
         """Toggles microphone state (for calling from Flask)"""
         if not self.connected:
+            self.logger.warning("Cannot toggle mute from Flask: not connected to voice channel")
             return {"success": False, "message": "Not connected to voice channel"}
         
         # Create a new event loop
+        self.logger.info("Creating new event loop for toggling microphone")
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(self.toggle_mute_async())
             if result:
+                self.logger.info(f"Successfully toggled microphone to: {self.muted}")
                 return {"success": True, "muted": self.muted}
+            
+            self.logger.warning("Failed to toggle microphone")
             return {"success": False, "message": "Failed to toggle microphone"}
         except Exception as e:
-            self.logger.error(f'Error: {e}')
+            self.logger.error(f'Error in toggle_mute: {e}')
+            self.logger.error(f'Traceback: {traceback.format_exc()}')
             return {"success": False, "message": str(e)}
         finally:
             loop.close()
+            self.logger.info("Closed event loop after toggling microphone")
     
     def toggle_deafen(self):
         """Toggles sound state (for calling from Flask)"""
         if not self.connected:
+            self.logger.warning("Cannot toggle deafen from Flask: not connected to voice channel")
             return {"success": False, "message": "Not connected to voice channel"}
         
         # Create a new event loop
+        self.logger.info("Creating new event loop for toggling sound")
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(self.toggle_deafen_async())
             if result:
+                self.logger.info(f"Successfully toggled sound to: {self.deafened}")
                 return {"success": True, "deafened": self.deafened}
+            
+            self.logger.warning("Failed to toggle sound")
             return {"success": False, "message": "Failed to toggle sound"}
         except Exception as e:
-            self.logger.error(f'Error: {e}')
+            self.logger.error(f'Error in toggle_deafen: {e}')
+            self.logger.error(f'Traceback: {traceback.format_exc()}')
             return {"success": False, "message": str(e)}
         finally:
             loop.close()
+            self.logger.info("Closed event loop after toggling sound")
     
     def get_status(self):
         """Returns current state"""
-        return {
+        state = {
             "connected": self.connected,
             "muted": self.muted,
             "deafened": self.deafened
-        } 
+        }
+        self.logger.info(f"Current Discord voice status: {state}")
+        return state 

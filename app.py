@@ -69,13 +69,23 @@ temp_monitor = TemperatureMonitor(Config)
 voice_client = None
 if discord_available and Config.DISCORD and Config.DISCORD.get('BOT_TOKEN') and Config.DISCORD.get('VOICE_CHANNEL_ID'):
     try:
+        bot_token = Config.DISCORD.get('BOT_TOKEN')
+        voice_channel_id = Config.DISCORD.get('VOICE_CHANNEL_ID')
+        
+        # Log token and channel info (partial token for security)
+        token_prefix = bot_token[:8] + "..." if bot_token and len(bot_token) > 10 else "None"
+        app.logger.info(f'Initializing Discord voice client with token prefix: {token_prefix}')
+        app.logger.info(f'Voice channel ID: {voice_channel_id}')
+        
         voice_client = DiscordVoiceClient(
-            token=Config.DISCORD.get('BOT_TOKEN'),
-            channel_id=Config.DISCORD.get('VOICE_CHANNEL_ID')
+            token=bot_token,
+            channel_id=voice_channel_id
         )
         app.logger.info('Discord voice client created')
     except Exception as e:
         app.logger.error(f'Error initializing Discord voice client: {e}')
+        import traceback
+        app.logger.error(f'Traceback: {traceback.format_exc()}')
 
 def load_album_cache():
     try:
