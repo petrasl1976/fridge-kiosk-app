@@ -5,6 +5,7 @@ import threading
 import traceback
 import os
 import time
+import sys
 
 class DiscordVoiceClient:
     def __init__(self, token, channel_id):
@@ -36,8 +37,20 @@ class DiscordVoiceClient:
         self.logger.info(f"Initializing Discord client with channel ID: {channel_id}")
         self.logger.info(f"Bot token length: {len(token) if token else 0}")
         
-        # Create client with our intents
-        self.client = discord.Client(intents=intents)
+        # Special gateway parameters to avoid heartbeat timeouts
+        gateway_params = {
+            'initial_reconnect_delay': 0.5,       # Lower for faster recovery
+            'reconnect_delay_max': 5.0,           # Cap at 5 seconds per retry
+            'shard_id': 0,                        # Single shard for small bot
+            'max_heartbeat_timeout': 60.0,        # Generous heartbeat timeout
+            'retry_reconnect': True,              # Try to reconnect if disconnected
+            'timeout': 30.0,                      # Socket timeout
+            'assume_offline': True,               # Start offline if can't connect
+            'heartbeat_timeout': 60.0             # Timeout for heartbeats
+        }
+        
+        # Create client with our intents and special params
+        self.client = discord.Client(intents=intents, **gateway_params)
         
         # Register event handlers
         @self.client.event
@@ -59,6 +72,14 @@ class DiscordVoiceClient:
                     self.muted = after.self_mute
                     self.deafened = after.self_deaf
                     self.logger.info(f'Voice state updated: muted={self.muted}, deafened={self.deafened}')
+        
+        # Add error handler for websocket/connection issues
+        @self.client.event
+        async def on_error(event, *args, **kwargs):
+            self.logger.error(f"Discord error in {event}")
+            error_type, error, tb = sys.exc_info()
+            self.logger.error(f"Error: {error}")
+            self.logger.error(f"Traceback: {''.join(traceback.format_tb(tb))}")
     
     async def connect_to_voice(self):
         """Connects to voice channel"""
@@ -88,7 +109,7 @@ class DiscordVoiceClient:
                 await self.voice_client.disconnect()
             
             # Connect to channel - py-cord uses different parameters than discord.py
-            self.voice_client = await channel.connect(reconnect=True)
+            self.voice_client = await channel.connect(reconnect=True, timeout=30.0)
             self.connected = True
             self.logger.info(f'Connected to voice channel: {channel.name}')
             
@@ -216,8 +237,34 @@ class DiscordVoiceClient:
         def run_client():
             try:
                 self.logger.info("Starting Discord client...")
-                # Run asynchronous Discord client
-                asyncio.run(self.client.start(self.token))
+                # Run asynchronous Discord client with custom loop
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                # Configure loop for better performance
+                loop.slow_callback_duration = 1.0  # Only warn for very slow callbacks
+                
+                # On Raspberry Pi, we need to be more conservative about CPU usage
+                if os.path.exists('/sys/firmware/devicetree/base/model'):
+                    with open('/sys/firmware/devicetree/base/model', 'r') as f:
+                        model = f.read()
+                        if 'Raspberry Pi' in model:
+                            self.logger.info("Running on Raspberry Pi - using conservative settings")
+                            loop.slow_callback_duration = 2.0
+                
+                # Start client with error handling
+                try:
+                    loop.run_until_complete(self.client.start(self.token))
+                except Exception as e:
+                    self.logger.error(f"Error in Discord client loop: {e}")
+                    self.logger.error(f"Traceback: {traceback.format_exc()}")
+                    
+                # Clean up
+                try:
+                    loop.run_until_complete(self.client.close())
+                    loop.close()
+                except:
+                    pass
             except Exception as e:
                 self.logger.error(f'Error starting Discord client: {e}')
                 self.logger.error(f'Traceback: {traceback.format_exc()}')
@@ -226,6 +273,19 @@ class DiscordVoiceClient:
         self.thread = threading.Thread(target=run_client, daemon=True)
         self.thread.start()
         self.logger.info('Discord client started in separate thread')
+        
+        # Create a watchdog thread to monitor and restart the client if needed
+        def watchdog():
+            while not self.shutdown_event.is_set():
+                if not self.thread.is_alive() and self.client:
+                    self.logger.warning("Discord thread died, restarting...")
+                    self.thread = threading.Thread(target=run_client, daemon=True)
+                    self.thread.start()
+                time.sleep(30)  # Check every 30 seconds
+        
+        watchdog_thread = threading.Thread(target=watchdog, daemon=True)
+        watchdog_thread.start()
+        self.logger.info("Discord watchdog started")
     
     def stop(self):
         """Stops Discord client"""
@@ -234,10 +294,23 @@ class DiscordVoiceClient:
             self.logger.info("Shutting down Discord client...")
             self.shutdown_event.set()
             
+            # Stop audio streaming immediately (without async)
+            if hasattr(self, "voice_client") and self.voice_client and hasattr(self.voice_client, "stop"):
+                try:
+                    self.voice_client.stop()
+                    self.logger.info("Stopped voice client audio")
+                except Exception as e:
+                    self.logger.error(f"Error stopping voice client audio: {e}")
+            
+            self.audio_streaming = False
+            
             # Create asynchronous function that will disconnect from voice and close client
             async def shutdown():
                 # Stop audio streaming if active
-                await self.stop_audio_stream()
+                try:
+                    await self.stop_audio_stream()
+                except Exception as e:
+                    self.logger.error(f"Error stopping audio stream: {e}")
                 
                 if self.voice_client:
                     self.logger.info("Disconnecting from voice channel...")
@@ -257,12 +330,36 @@ class DiscordVoiceClient:
             # Run disconnect function
             try:
                 self.logger.info("Creating event loop for shutdown...")
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(shutdown())
-                self.logger.info("Shutdown completed via event loop")
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    # No event loop, create new one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Set a timeout for shutdown to avoid hanging
+                try:
+                    loop.run_until_complete(asyncio.wait_for(shutdown(), 10.0))
+                    self.logger.info("Shutdown completed via event loop")
+                except asyncio.TimeoutError:
+                    self.logger.warning("Shutdown timed out after 10 seconds, forcing exit")
+                except Exception as e:
+                    self.logger.error(f"Error during shutdown: {e}")
             except Exception as e:
                 self.logger.error(f'Error stopping Discord client: {e}')
                 self.logger.error(f'Traceback: {traceback.format_exc()}')
+            
+            # Wait for thread to terminate
+            if hasattr(self, 'thread') and self.thread and self.thread.is_alive():
+                self.logger.info("Waiting for Discord thread to terminate (max 5 seconds)...")
+                self.thread.join(5.0)  # Wait max 5 seconds
+                if self.thread.is_alive():
+                    self.logger.warning("Discord thread did not terminate, proceeding anyway")
+        
+        self.connected = False
+        self.muted = True
+        self.deafened = True
+        self.audio_streaming = False
         
         self.logger.info('Discord client stopped')
     

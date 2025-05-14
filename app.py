@@ -783,6 +783,31 @@ def credentials_to_dict(credentials):
         'scopes': credentials.scopes
     }
 
+@app.route('/disable_discord', methods=['POST'])
+def disable_discord():
+    """Disables Discord voice client - emergency function"""
+    global voice_client
+    
+    if not discord_available or not voice_client:
+        return jsonify({"success": False, "message": "Discord voice client not available"}), 400
+    
+    try:
+        # Stop the voice client
+        app.logger.warning("Disabling Discord voice client by user request")
+        voice_client.stop()
+        voice_client = None
+        
+        # Update config
+        if hasattr(Config, 'DISCORD'):
+            Config.DISCORD['MIC_ENABLED'] = False
+            Config.DISCORD['SOUND_ENABLED'] = False
+            app.logger.info("Updated config to disable Discord voice")
+        
+        return jsonify({"success": True, "message": "Discord voice client disabled"})
+    except Exception as e:
+        app.logger.error(f"Error disabling Discord voice client: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route('/log_media_display', methods=['POST'])
 def log_media_display():
     """Logs when a media item is displayed on screen"""
