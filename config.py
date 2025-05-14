@@ -54,10 +54,7 @@ class Config:
     DISCORD = {
         "BOT_TOKEN": os.getenv("DISCORD_BOT_TOKEN"),
         "CHANNEL_ID": os.getenv("DISCORD_CHANNEL_ID"),
-        "VOICE_CHANNEL_ID": os.getenv("DISCORD_VOICE_CHANNEL_ID"),
-        "MESSAGE_COUNT": 10,
-        "MIC_ENABLED": True,   # Microphone state: True - enabled, False - disabled
-        "SOUND_ENABLED": True   # Sound state: True - enabled, False - disabled
+        "MESSAGE_COUNT": 10
     }
 
     BROADLINK = {
@@ -137,18 +134,4 @@ class Config:
     TEMP_CRITICAL = 80              # Critical temperature (°C) at which to restart device
     TEMP_RECOVERY = 60              # Temperature (°C) below which to return to normal mode
     TEMP_CHECK_INTERVAL = 10        # Check interval (seconds)
-    
-    # Voice overlay settings
-    VOICE_OVERLAY = {
-        "top": "2%",
-        "left": "80%",
-        "width": "28%", 
-        "height": "auto",
-        "z_index": 1000,
-        "font_size": "1.5em",
-        "background": "rgba(0, 0, 0, 0.7)",
-        "color": "#fff",
-        "padding": "10px 15px",
-        "border_radius": "8px"
-    }
 

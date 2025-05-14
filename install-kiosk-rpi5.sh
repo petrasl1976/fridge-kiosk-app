@@ -37,20 +37,17 @@ echo "   1. Go to https://discord.com/developers/applications"
 echo "   2. Click 'New Application' and give it a name"
 echo "   3. Go to 'Bot' section and click 'Add Bot'"
 echo "   4. Under TOKEN, click 'Copy' (or 'Reset Token' if needed)"
-echo "   5. Enable 'Message Content Intent', 'Server Members Intent', and 'Voice States Intent'"
+echo "   5. Enable 'Message Content Intent' and 'Server Members Intent'"
 echo "   6. Paste token into .env file as DISCORD_BOT_TOKEN"
 echo "   7. Go to OAuth2 -> URL Generator, select 'bot' scope with permissions:"
 echo "      - Read Messages/View Channels"
 echo "      - Send Messages"
-echo "      - Connect (voice)"
-echo "      - Speak (voice)"
 echo "   8. Use generated URL to invite bot to your Discord server"
 echo
 echo "  INSTRUCTIONS for obtaining Discord channel IDs:"
 echo "   1. Open Discord app settings -> Advanced -> Enable Developer Mode"
 echo "   2. Right-click on a text channel -> Copy ID (for DISCORD_CHANNEL_ID)"
-echo "   3. Right-click on a voice channel -> Copy ID (for DISCORD_VOICE_CHANNEL_ID)"
-echo "   4. Paste these IDs into .env file"
+echo "   3. Paste the ID into .env file"
 echo
 echo "USAGE:"
 echo "  • Log in as kiosk user and run: sudo ./install-kiosk-rpi5.sh"
@@ -90,11 +87,8 @@ setup_python_env() {
     cd "$app_dir"
     python3 -m venv venv
     
-    # Set permissions for the virtual environment
+    # Set ownership for the virtual environment
     chown -R kiosk:kiosk "$app_dir/venv"
-    chmod -R 755 "$app_dir/venv/bin"
-    # Ensure all files in bin directory are executable
-    chmod +x "$app_dir/venv/bin/"*
     
     echo "Installing required Python modules..."
     sudo -u kiosk "$app_dir/venv/bin/pip" install --no-cache-dir flask \
@@ -105,20 +99,22 @@ setup_python_env() {
         broadlink \
         pytz \
         tzlocal \
-        python-dotenv \
-        py-cord \
-        PyNaCl \
-        pyaudio
+        python-dotenv
         
-    # Uninstall discord.py if it exists to avoid conflicts
-    sudo -u kiosk "$app_dir/venv/bin/pip" uninstall -y discord.py discord
+    # First uninstall any discord packages to avoid conflicts
+    sudo -u kiosk "$app_dir/venv/bin/pip" uninstall -y discord.py discord py-cord
     
-    # Install py-cord with voice support
-    sudo -u kiosk "$app_dir/venv/bin/pip" install --no-cache-dir "py-cord[voice]"
+    # Install Discord API client (without voice support)
+    echo "Installing Discord API client..."
+    sudo -u kiosk "$app_dir/venv/bin/pip" install --no-cache-dir "py-cord"
+    
+    # IMPORTANT: Set permissions AFTER all pip installations
+    echo "Setting executable permissions for all venv scripts..."
+    chmod -R 755 "$app_dir/venv/bin"
 }
 
 echo "Checking and installing required packages..."
-PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr ffmpeg alsa-utils pulseaudio python3-dev portaudio19-dev libasound2-dev"
+PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr ffmpeg"
 NEW_PACKAGES=""
 
 for pkg in $PACKAGES; do
@@ -200,15 +196,11 @@ fi
 chmod 600 "$KIOSK_APP_DIR/config.py"
 chmod 600 "$KIOSK_APP_DIR/.env"
 chmod +x "$KIOSK_APP_DIR/app.py"
-chmod +x "$KIOSK_APP_DIR/audio_test.py"
 chmod 666 "$KIOSK_APP_DIR/albums_cache.json"
 chmod 666 "$KIOSK_APP_DIR/log.log"
 
 # Ensure Python modules have correct permissions
-chmod 644 "$KIOSK_APP_DIR/temp_monitor.py" 
-if [ -f "$KIOSK_APP_DIR/discord_voice.py" ]; then
-    chmod 644 "$KIOSK_APP_DIR/discord_voice.py"
-fi
+chmod 644 "$KIOSK_APP_DIR/temp_monitor.py"
 
 echo "Creating startup script..."
 cat > /home/kiosk/start-kiosk.sh << 'EOL'
@@ -347,10 +339,9 @@ echo "4. Temperature monitoring:"
 echo "   - System will automatically monitor CPU temperature"
 echo "   - When temperature exceeds 65°C, system will temporarily switch to photo mode only"
 echo
-echo "5. Discord voice:"
-echo "   - Make sure DISCORD_BOT_TOKEN and DISCORD_VOICE_CHANNEL_ID are set in .env file"
-echo "   - Microphone and speaker status can be configured in config.py file (MIC_ENABLED and SOUND_ENABLED parameters)"
+echo "5. Discord :"
+echo "   - Make sure DISCORD_BOT_TOKEN and DISCORD_CHANNEL_ID are set in .env file"
 echo
 echo "IMPORTANT: After first installation, restart the system (sudo reboot)"
 
-exit 0 
+exit 0

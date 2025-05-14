@@ -4,8 +4,8 @@ A Raspberry Pi based kiosk application for your refrigerator that displays:
 
 - **Family photos and videos** from Google Photos (random album, random photo + adjustable sequence)
 - **Family calendar** with events color-coded by person
-- **Discord messages** and voice channel status
-- **Weather forecast** for whole week
+- **Discord messages** from your server
+- **Weather forecast** for week
 - **System status** indor temperature and humidity including CPU temperature monitoring
 - **Time and date** 
 - **Temperature monitoring** with auto-switching to photo-only mode when Pi gets hot

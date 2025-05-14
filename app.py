@@ -38,14 +38,6 @@ import broadlink
 from config import Config
 from temp_monitor import TemperatureMonitor
 
-# Try to import Discord voice module if it exists
-try:
-    from discord_voice import DiscordVoiceClient
-    discord_available = True
-except ImportError:
-    app.logger.warning("Discord voice module is not available. Voice channel will not work.")
-    discord_available = False
-
 # Add zoneinfo (works from Python 3.9). If you don't have it, use pytz.
 from zoneinfo import ZoneInfo
 
@@ -53,6 +45,10 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__, static_folder='static')
 app.secret_key = "something_secret"
+
+# Disable werkzeug normal HTTP request logging
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.setLevel(logging.WARNING)  # Show only WARNING and higher level messages
 
 SCOPES = [
     'https://www.googleapis.com/auth/photoslibrary.readonly',
@@ -64,28 +60,6 @@ CACHE_EXPIRATION = 30 * 24 * 3600  # 30 days (was 7)
 
 # Initialize temperature monitoring
 temp_monitor = TemperatureMonitor(Config)
-
-# Initialize Discord voice client if configuration and module are available
-voice_client = None
-if discord_available and Config.DISCORD and Config.DISCORD.get('BOT_TOKEN') and Config.DISCORD.get('VOICE_CHANNEL_ID'):
-    try:
-        bot_token = Config.DISCORD.get('BOT_TOKEN')
-        voice_channel_id = Config.DISCORD.get('VOICE_CHANNEL_ID')
-        
-        # Log token and channel info (partial token for security)
-        token_prefix = bot_token[:8] + "..." if bot_token and len(bot_token) > 10 else "None"
-        app.logger.info(f'Initializing Discord voice client with token prefix: {token_prefix}')
-        app.logger.info(f'Voice channel ID: {voice_channel_id}')
-        
-        voice_client = DiscordVoiceClient(
-            token=bot_token,
-            channel_id=voice_channel_id
-        )
-        app.logger.info('Discord voice client created')
-    except Exception as e:
-        app.logger.error(f'Error initializing Discord voice client: {e}')
-        import traceback
-        app.logger.error(f'Traceback: {traceback.format_exc()}')
 
 def load_album_cache():
     try:
@@ -730,130 +704,17 @@ def get_disk_usage():
         app.logger.error(f"Error getting disk usage: {e}")
         return {'error': str(e)}
 
-@app.route('/voice_control', methods=['POST'])
-def voice_control():
-    """Controls voice client state"""
-    if not discord_available:
-        return jsonify({"success": False, "message": "Discord module not installed"}), 400
-        
-    if not voice_client:
-        return jsonify({"success": False, "message": "Discord voice client not initialized"}), 400
-    
-    try:
-        action = request.json.get('action')
-        
-        if action == 'mute':
-            result = voice_client.toggle_mute()
-            return jsonify(result)
-        elif action == 'deafen':
-            result = voice_client.toggle_deafen()
-            return jsonify(result)
-        else:
-            return jsonify({"success": False, "message": "Invalid command"}), 400
-            
-    except Exception as e:
-        app.logger.error(f"Error in voice_control: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
-
-@app.route('/voice_status', methods=['GET'])
-def voice_status():
-    """Returns voice client state"""
-    if not discord_available:
-        return jsonify({"success": False, "message": "Discord module not installed"}), 400
-        
-    if not voice_client:
-        return jsonify({"success": False, "message": "Discord voice client not initialized"}), 400
-    
-    try:
-        status = voice_client.get_status()
-        return jsonify({"success": True, "status": status})
-            
-    except Exception as e:
-        app.logger.error(f"Error in voice_status: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
-
-def credentials_to_dict(credentials):
-    """Convert Google Credentials object to a dictionary."""
-    return {
-        'token': credentials.token,
-        'refresh_token': credentials.refresh_token,
-        'token_uri': credentials.token_uri,
-        'client_id': credentials.client_id,
-        'client_secret': credentials.client_secret,
-        'scopes': credentials.scopes
-    }
-
-@app.route('/disable_discord', methods=['POST'])
-def disable_discord():
-    """Disables Discord voice client - emergency function"""
-    global voice_client
-    
-    if not discord_available or not voice_client:
-        return jsonify({"success": False, "message": "Discord voice client not available"}), 400
-    
-    try:
-        # Stop the voice client
-        app.logger.warning("Disabling Discord voice client by user request")
-        voice_client.stop()
-        voice_client = None
-        
-        # Update config
-        if hasattr(Config, 'DISCORD'):
-            Config.DISCORD['MIC_ENABLED'] = False
-            Config.DISCORD['SOUND_ENABLED'] = False
-            app.logger.info("Updated config to disable Discord voice")
-        
-        return jsonify({"success": True, "message": "Discord voice client disabled"})
-    except Exception as e:
-        app.logger.error(f"Error disabling Discord voice client: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
-
 @app.route('/log_media_display', methods=['POST'])
 def log_media_display():
-    """Logs when a media item is displayed on screen"""
-    try:
-        data = request.json
-        if not data:
-            return jsonify({"success": False, "message": "No data provided"}), 400
-            
-        album = data.get('album', 'Unknown Album')
-        filename = data.get('filename', 'Unknown File')
-        media_type = data.get('mediaType', 'unknown')
-        
-        # Log in specified format
-        media_logger.info(f"[{album}] {filename} ({media_type})")
-        
-        return jsonify({"success": True})
-    except Exception as e:
-        app.logger.error(f"Error logging media display: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
-
-@app.route('/audio_devices')
-def audio_devices():
-    """Returns information about the system's audio devices"""
-    try:
-        import subprocess
-        
-        # Check audio input devices
-        input_cmd = subprocess.run(['arecord', '-l'], capture_output=True, text=True)
-        output_cmd = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
-        
-        # Check currently loaded audio modules
-        modules_cmd = subprocess.run(['lsmod', '|', 'grep', 'snd'], capture_output=True, text=True, shell=True)
-        
-        # Get current default audio device
-        default_input = subprocess.run(['amixer', 'info'], capture_output=True, text=True)
-        
-        return jsonify({
-            "audio_inputs": input_cmd.stdout,
-            "audio_outputs": output_cmd.stdout,
-            "audio_modules": modules_cmd.stdout,
-            "default_device": default_input.stdout,
-            "success": True
-        })
-    except Exception as e:
-        app.logger.error(f"Error getting audio devices: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+    """Log when media items start and stop displaying"""
+    data = request.json
+    if data and 'event' in data and 'item_id' in data:
+        event_type = data['event']
+        item_id = data['item_id']
+        album_id = data.get('album_id', 'unknown')
+        app.logger.info(f"Media display event: {event_type} for item {item_id} in album {album_id}")
+        return jsonify({"success": True}), 200
+    return jsonify({"success": False, "error": "Invalid data"}), 400
 
 # Register shutdown function
 @app.teardown_appcontext
@@ -866,29 +727,6 @@ def cleanup_resources():
         temp_monitor.stop()
         app.logger.info("Temperature monitoring stopped")
     
-    # Stop Discord voice client
-    if discord_available and voice_client:
-        try:
-            voice_client.stop()
-            app.logger.info("Discord voice client stopped")
-        except Exception as e:
-            app.logger.error(f"Error stopping Discord voice client: {e}")
-    
-    # Close aiohttp client sessions and connectors
-    try:
-        import asyncio
-        import aiohttp
-        
-        # Look for unclosed connectors and sessions
-        for task in asyncio.all_tasks(loop=asyncio.get_event_loop()):
-            if not task.done() and 'aiohttp' in str(task):
-                task.cancel()
-                app.logger.info(f"Interrupted unfinished aiohttp task: {task}")
-                
-        app.logger.info("All aiohttp resources cleaned up")
-    except Exception as e:
-        app.logger.error(f"Error cleaning up aiohttp resources: {e}")
-
 # Set exit process
 import atexit
 atexit.register(cleanup_resources)
@@ -897,28 +735,20 @@ atexit.register(cleanup_resources)
 def before_app_start():
     temp_monitor.start()
     app.logger.info("Temperature monitoring started")
-    
-    # Start Discord voice client
-    if discord_available and voice_client:
-        voice_client.start()
-        app.logger.info("Discord voice client started")
-        
-        # Set initial microphone and sound state according to configuration
-        try:
-            # If configured to have microphone enabled, but it's currently disabled
-            if Config.DISCORD.get('MIC_ENABLED', False) != voice_client.muted:
-                threading.Timer(5.0, lambda: voice_client.toggle_mute()).start()
-                app.logger.info(f"Microphone state will be set to: {'enabled' if Config.DISCORD.get('MIC_ENABLED', False) else 'disabled'}")
-            
-            # If configured to have sound enabled, but it's currently disabled
-            if Config.DISCORD.get('SOUND_ENABLED', False) != voice_client.deafened:
-                threading.Timer(5.0, lambda: voice_client.toggle_deafen()).start()
-                app.logger.info(f"Sound state will be set to: {'enabled' if Config.DISCORD.get('SOUND_ENABLED', False) else 'disabled'}")
-        except Exception as e:
-            app.logger.error(f"Error setting initial microphone and sound state: {e}")
 
-# Start temperature monitoring and initialize Discord client
+# Start temperature monitoring
 before_app_start()
+
+def credentials_to_dict(credentials):
+    """Convert Google Credentials object to a dictionary."""
+    return {
+        'token': credentials.token,
+        'refresh_token': credentials.refresh_token,
+        'token_uri': credentials.token_uri,
+        'client_id': credentials.client_id,
+        'client_secret': credentials.client_secret,
+        'scopes': credentials.scopes
+    }
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
