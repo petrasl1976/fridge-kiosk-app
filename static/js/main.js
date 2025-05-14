@@ -320,9 +320,10 @@ function updateSensorOverlay() {
         // Show error but still display CPU temp if available
         let errorText = "Sensors error: " + d.error;
         if (d.cpu_temp) {
-          errorText += ` | CPU: ${d.cpu_temp.toFixed(1)}°C`;
+          const cpuColor = getTempColor(d.cpu_temp);
+          errorText += ` | <span style="color:${cpuColor}">${d.cpu_temp.toFixed(1)}°C</span>`;
         }
-        sensorDiv.innerText = errorText;
+        sensorDiv.innerHTML = errorText;
       } else {
         // Show both environmental sensor and CPU temperature
         let sensorText = "";
@@ -332,12 +333,13 @@ function updateSensorOverlay() {
           sensorText = `${d.temperature}°C - ${d.humidity}%`;
         }
         
-        // Add CPU temperature if available
+        // Add CPU temperature if available with color coding
         if (d.cpu_temp !== undefined) {
+          const cpuColor = getTempColor(d.cpu_temp);
           if (sensorText) {
-            sensorText += ` | CPU: ${d.cpu_temp.toFixed(1)}°C`;
+            sensorText += ` | <span style="color:${cpuColor}">${d.cpu_temp.toFixed(1)}°C</span>`;
           } else {
-            sensorText = `CPU: ${d.cpu_temp.toFixed(1)}°C`;
+            sensorText = `<span style="color:${cpuColor}">${d.cpu_temp.toFixed(1)}°C</span>`;
           }
         }
         
@@ -347,7 +349,7 @@ function updateSensorOverlay() {
         }
         
         console.log("Sensor data updated:", sensorText); // Debug log
-        sensorDiv.innerText = sensorText;
+        sensorDiv.innerHTML = sensorText;
       }
     })
     .catch(e => {
@@ -355,6 +357,13 @@ function updateSensorOverlay() {
       let sensorDiv = document.getElementById('sensor-data');
       if (sensorDiv) sensorDiv.innerText = "Sensor error";
     });
+}
+
+// Helper function to get color based on temperature
+function getTempColor(temp) {
+  if (temp < 60) return "#4CAF50"; // Green (normal)
+  if (temp < 70) return "#FFC107"; // Yellow/Orange (warning)
+  return "#F44336";                // Red (critical)
 }
 
 /* ========================
