@@ -3,6 +3,7 @@ import logging
 import asyncio
 import threading
 import traceback
+import os
 
 class DiscordVoiceClient:
     def __init__(self, token, channel_id):
@@ -10,10 +11,15 @@ class DiscordVoiceClient:
         self.channel_id = channel_id
         self.logger = logging.getLogger('discord_voice')
         
+        # Set audio device environment variables - force specific device
+        os.environ['ALSA_CARD'] = '2'  # Jabra device from arecord -l
+        os.environ['ALSA_PCM_DEVICE'] = '0'
+        self.logger.info("Set audio device to card 2, device 0 (Jabra)")
+        
         # State variables
         self.connected = False
-        self.muted = True
-        self.deafened = True
+        self.muted = False  # Start unmuted for debugging
+        self.deafened = False  # Start undeafened for debugging
         
         # Discord client initialization
         self.client = None
@@ -83,6 +89,15 @@ class DiscordVoiceClient:
             self.voice_client = await channel.connect()
             self.connected = True
             self.logger.info(f'Connected to voice channel: {channel.name}')
+            
+            # Set voice activity mode for microphone input
+            # This is essential for proper microphone operation
+            try:
+                if hasattr(self.voice_client, 'voice_client'):
+                    self.voice_client.voice_client.use_voice_activation = True
+                    self.logger.info("Voice activation enabled")
+            except Exception as vad_error:
+                self.logger.error(f"Failed to set voice activation: {vad_error}")
             
             # Import config here to avoid circular import
             try:
