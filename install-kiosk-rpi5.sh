@@ -118,7 +118,7 @@ setup_python_env() {
 }
 
 echo "Checking and installing required packages..."
-PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr ffmpeg alsa-utils pulseaudio"
+PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr ffmpeg alsa-utils pulseaudio python3-dev portaudio19-dev libasound2-dev"
 NEW_PACKAGES=""
 
 for pkg in $PACKAGES; do

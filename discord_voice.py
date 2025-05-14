@@ -87,15 +87,12 @@ class DiscordVoiceClient:
                 self.logger.info("Already connected to a channel, disconnecting first...")
                 await self.voice_client.disconnect()
             
-            # Connect to channel with additional options
-            self.voice_client = await channel.connect(
-                self_mute=False,
-                self_deaf=False,
-                reconnect=True
-            )
+            # Connect to channel - py-cord uses different parameters than discord.py
+            self.voice_client = await channel.connect(reconnect=True)
             self.connected = True
             self.logger.info(f'Connected to voice channel: {channel.name}')
             
+            # Need to manually set mute and deafen state after connection
             # Import config here to avoid circular import
             try:
                 from config import Config
@@ -104,8 +101,18 @@ class DiscordVoiceClient:
                 self.deafened = not Config.DISCORD.get('SOUND_ENABLED', False)  # Invert because true means deafened
                 
                 self.logger.info(f'Setting initial voice states - muted: {self.muted}, deafened: {self.deafened}')
-                await self.voice_client.set_mute(self.muted)
-                await self.voice_client.set_deaf(self.deafened)
+                if hasattr(self.voice_client, "set_mute"):
+                    await self.voice_client.set_mute(self.muted)
+                else:
+                    # Fallback for py-cord if direct API not available
+                    # Need to use Guild.voice_client methods
+                    guild = channel.guild
+                    if hasattr(guild, "change_voice_state"):
+                        await guild.change_voice_state(
+                            channel=channel,
+                            self_mute=self.muted,
+                            self_deaf=self.deafened
+                        )
                 
                 self.logger.info(f'Initial state set - Microphone: {"disabled" if self.muted else "enabled"}, Sound: {"disabled" if self.deafened else "enabled"}')
                 
@@ -116,11 +123,22 @@ class DiscordVoiceClient:
                     await self.start_audio_stream()
             except Exception as config_e:
                 self.logger.error(f'Error setting initial voice state: {config_e}')
+                self.logger.error(f'Traceback: {traceback.format_exc()}')
                 # Default to enabling everything
                 self.muted = False
                 self.deafened = False
-                await self.voice_client.set_mute(self.muted)
-                await self.voice_client.set_deaf(self.deafened)
+                # Try to set defaults anyway
+                try:
+                    guild = channel.guild
+                    if hasattr(guild, "change_voice_state"):
+                        await guild.change_voice_state(
+                            channel=channel,
+                            self_mute=self.muted,
+                            self_deaf=self.deafened
+                        )
+                except Exception as voice_e:
+                    self.logger.error(f'Error setting voice state: {voice_e}')
+                
                 # Always try to start audio stream in default case
                 await asyncio.sleep(3)
                 await self.start_audio_stream()
@@ -136,21 +154,45 @@ class DiscordVoiceClient:
             return False
             
         try:
-            # Use direct ALSA input for the mic
-            # Format: 'alsa:hw:CARD,DEVICE'
-            source = discord.PCMAudio(source='alsa:hw:2,0')
+            # Try different audio formats
+            sources = [
+                # Try direct ALSA input first
+                ("direct ALSA", lambda: discord.PCMAudio(source='alsa:hw:2,0')),
+                # Backup option using arecord as external process
+                ("arecord via pipe", lambda: discord.FFmpegPCMAudio(
+                    source="-",
+                    pipe=True,
+                    before_options="-f alsa -i hw:2,0 -ac 1 -ar 48000",
+                    options="-loglevel error"
+                ))
+            ]
             
-            self.logger.info("Starting audio stream from microphone...")
+            # Try each source until one works
+            for source_name, source_factory in sources:
+                try:
+                    self.logger.info(f"Trying audio source: {source_name}")
+                    source = source_factory()
+                    
+                    # If we have a running audio stream, stop it first
+                    if hasattr(self.voice_client, "source") and self.voice_client.source:
+                        self.voice_client.stop()
+                        self.logger.info("Stopped existing audio stream")
+                    
+                    # Play audio from mic to Discord
+                    self.voice_client.play(source, after=lambda e: 
+                        self.logger.error(f"Audio stream stopped: {e}") if e else 
+                        self.logger.info("Audio stream ended normally")
+                    )
+                    
+                    self.audio_streaming = True
+                    self.logger.info(f"Audio stream started successfully using {source_name}")
+                    return True
+                except Exception as src_e:
+                    self.logger.error(f"Failed to start audio with {source_name}: {src_e}")
+                    continue
             
-            # Play audio from mic to Discord
-            self.voice_client.play(source, after=lambda e: 
-                self.logger.error(f"Audio stream stopped: {e}") if e else 
-                self.logger.info("Audio stream ended normally")
-            )
-            
-            self.audio_streaming = True
-            self.logger.info("Audio stream started successfully")
-            return True
+            self.logger.error("All audio source methods failed")
+            return False
         except Exception as e:
             self.logger.error(f"Failed to start audio stream: {e}")
             self.logger.error(f"Traceback: {traceback.format_exc()}")
@@ -233,8 +275,24 @@ class DiscordVoiceClient:
         try:
             self.logger.info(f"Toggling microphone from {self.muted} to {not self.muted}")
             self.muted = not self.muted
-            await self.voice_client.set_mute(self.muted)
             
+            # Different ways to toggle mute depending on the library we're using
+            try:
+                # Try direct method first
+                if hasattr(self.voice_client, "set_mute"):
+                    await self.voice_client.set_mute(self.muted)
+                # Fallback to guild voice state
+                else:
+                    channel = self.voice_client.channel
+                    guild = channel.guild
+                    await guild.change_voice_state(
+                        channel=channel,
+                        self_mute=self.muted,
+                        self_deaf=self.deafened
+                    )
+            except Exception as toggle_e:
+                self.logger.error(f"Error setting mute state: {toggle_e}")
+                
             # When unmuting, start audio stream; when muting, stop it
             if not self.muted and not self.audio_streaming:
                 await self.start_audio_stream()
@@ -257,7 +315,24 @@ class DiscordVoiceClient:
         try:
             self.logger.info(f"Toggling sound from {self.deafened} to {not self.deafened}")
             self.deafened = not self.deafened
-            await self.voice_client.set_deaf(self.deafened)
+            
+            # Different ways to toggle deafen depending on the library
+            try:
+                # Try direct method first
+                if hasattr(self.voice_client, "set_deaf"):
+                    await self.voice_client.set_deaf(self.deafened)
+                # Fallback to guild voice state
+                else:
+                    channel = self.voice_client.channel
+                    guild = channel.guild
+                    await guild.change_voice_state(
+                        channel=channel,
+                        self_mute=self.muted,
+                        self_deaf=self.deafened
+                    )
+            except Exception as toggle_e:
+                self.logger.error(f"Error setting deafen state: {toggle_e}")
+                
             self.logger.info(f'Sound {"disabled" if self.deafened else "enabled"}')
             return True
         except Exception as e:
