@@ -803,6 +803,33 @@ def log_media_display():
         app.logger.error(f"Error logging media display: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+@app.route('/audio_devices')
+def audio_devices():
+    """Returns information about the system's audio devices"""
+    try:
+        import subprocess
+        
+        # Check audio input devices
+        input_cmd = subprocess.run(['arecord', '-l'], capture_output=True, text=True)
+        output_cmd = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
+        
+        # Check currently loaded audio modules
+        modules_cmd = subprocess.run(['lsmod', '|', 'grep', 'snd'], capture_output=True, text=True, shell=True)
+        
+        # Get current default audio device
+        default_input = subprocess.run(['amixer', 'info'], capture_output=True, text=True)
+        
+        return jsonify({
+            "audio_inputs": input_cmd.stdout,
+            "audio_outputs": output_cmd.stdout,
+            "audio_modules": modules_cmd.stdout,
+            "default_device": default_input.stdout,
+            "success": True
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting audio devices: {e}")
+        return jsonify({"success": False, "message": str(e)}), 500
+
 # Register shutdown function
 @app.teardown_appcontext
 def shutdown_session(exception=None):

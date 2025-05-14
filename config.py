@@ -56,7 +56,7 @@ class Config:
         "CHANNEL_ID": os.getenv("DISCORD_CHANNEL_ID"),
         "VOICE_CHANNEL_ID": os.getenv("DISCORD_VOICE_CHANNEL_ID"),
         "MESSAGE_COUNT": 10,
-        "MIC_ENABLED": False,   # Microphone state: True - enabled, False - disabled
+        "MIC_ENABLED": True,   # Microphone state: True - enabled, False - disabled
         "SOUND_ENABLED": True   # Sound state: True - enabled, False - disabled
     }
 

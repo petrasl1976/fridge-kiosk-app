@@ -84,11 +84,25 @@ class DiscordVoiceClient:
             self.connected = True
             self.logger.info(f'Connected to voice channel: {channel.name}')
             
-            # Set initial state - muted and deafened
-            await self.voice_client.set_mute(True)
-            await self.voice_client.set_deaf(True)
-            self.muted = True
-            self.deafened = True
+            # Import config here to avoid circular import
+            try:
+                from config import Config
+                # Set initial state from config
+                self.muted = not Config.DISCORD.get('MIC_ENABLED', False)  # Invert because true means muted
+                self.deafened = not Config.DISCORD.get('SOUND_ENABLED', False)  # Invert because true means deafened
+                
+                self.logger.info(f'Setting initial voice states - muted: {self.muted}, deafened: {self.deafened}')
+                await self.voice_client.set_mute(self.muted)
+                await self.voice_client.set_deaf(self.deafened)
+                
+                self.logger.info(f'Initial state set - Microphone: {"disabled" if self.muted else "enabled"}, Sound: {"disabled" if self.deafened else "enabled"}')
+            except Exception as config_e:
+                self.logger.error(f'Error setting initial voice state: {config_e}')
+                # Default to legacy behavior if config import fails
+                self.muted = False  # Enable microphone by default
+                self.deafened = False  # Enable sound by default
+                await self.voice_client.set_mute(self.muted)
+                await self.voice_client.set_deaf(self.deafened)
         
         except Exception as e:
             self.logger.error(f'Error connecting to voice channel: {e}')
