@@ -308,16 +308,46 @@ function updateTodayEvents() {
    SENSORIŲ (TEMPERATURE/HUMIDITY) ATNAUJINIMAS
    ======================== */
 function updateSensorOverlay() {
-  fetch('/newsensors')
+  // Naudojame pilną URL, jei reikia (arba apibrėžkime base URL kintamąjį) 
+  // Naudojame window.location.origin kad veiktų su bet kokiu hostu
+  fetch(window.location.origin + '/newsensors')
     .then(r => r.json())
     .then(d => {
       let sensorDiv = document.getElementById('sensor-data');
       if (!sensorDiv) return;
 
       if (d.error) {
-        sensorDiv.innerText = "Sensors error: " + d.error;
+        // Show error but still display CPU temp if available
+        let errorText = "Sensors error: " + d.error;
+        if (d.cpu_temp) {
+          errorText += ` | CPU: ${d.cpu_temp.toFixed(1)}°C`;
+        }
+        sensorDiv.innerText = errorText;
       } else {
-        sensorDiv.innerText = `${d.temperature}°C - ${d.humidity}%`;
+        // Show both environmental sensor and CPU temperature
+        let sensorText = "";
+        
+        // Add environmental temperature and humidity if available
+        if (d.temperature !== undefined && d.humidity !== undefined) {
+          sensorText = `${d.temperature}°C - ${d.humidity}%`;
+        }
+        
+        // Add CPU temperature if available
+        if (d.cpu_temp !== undefined) {
+          if (sensorText) {
+            sensorText += ` | CPU: ${d.cpu_temp.toFixed(1)}°C`;
+          } else {
+            sensorText = `CPU: ${d.cpu_temp.toFixed(1)}°C`;
+          }
+        }
+        
+        // If we have no data at all
+        if (!sensorText) {
+          sensorText = "No sensor data available";
+        }
+        
+        console.log("Sensor data updated:", sensorText); // Debug log
+        sensorDiv.innerText = sensorText;
       }
     })
     .catch(e => {
