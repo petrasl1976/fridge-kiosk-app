@@ -119,7 +119,7 @@ class Config:
     STATUS_OVERLAY = {
         "top": "7%",
         "left": "65%",
-        "width": "30%",
+        "width": "35%",
         "height": "auto",
         "z_index": 9999,
         "background": "rgba(0, 0, 0, 0)",
