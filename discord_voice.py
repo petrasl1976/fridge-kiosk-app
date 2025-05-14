@@ -4,6 +4,7 @@ import asyncio
 import threading
 import traceback
 import os
+import time
 
 class DiscordVoiceClient:
     def __init__(self, token, channel_id):
@@ -20,6 +21,7 @@ class DiscordVoiceClient:
         self.connected = False
         self.muted = False  # Start unmuted for debugging
         self.deafened = False  # Start undeafened for debugging
+        self.audio_streaming = False
         
         # Discord client initialization
         self.client = None
@@ -85,19 +87,14 @@ class DiscordVoiceClient:
                 self.logger.info("Already connected to a channel, disconnecting first...")
                 await self.voice_client.disconnect()
             
-            # Connect to channel
-            self.voice_client = await channel.connect()
+            # Connect to channel with additional options
+            self.voice_client = await channel.connect(
+                self_mute=False,
+                self_deaf=False,
+                reconnect=True
+            )
             self.connected = True
             self.logger.info(f'Connected to voice channel: {channel.name}')
-            
-            # Set voice activity mode for microphone input
-            # This is essential for proper microphone operation
-            try:
-                if hasattr(self.voice_client, 'voice_client'):
-                    self.voice_client.voice_client.use_voice_activation = True
-                    self.logger.info("Voice activation enabled")
-            except Exception as vad_error:
-                self.logger.error(f"Failed to set voice activation: {vad_error}")
             
             # Import config here to avoid circular import
             try:
@@ -111,18 +108,67 @@ class DiscordVoiceClient:
                 await self.voice_client.set_deaf(self.deafened)
                 
                 self.logger.info(f'Initial state set - Microphone: {"disabled" if self.muted else "enabled"}, Sound: {"disabled" if self.deafened else "enabled"}')
+                
+                # Start audio stream after a brief delay if mic is enabled
+                if not self.muted:
+                    self.logger.info("Will start audio stream in 3 seconds...")
+                    await asyncio.sleep(3)
+                    await self.start_audio_stream()
             except Exception as config_e:
                 self.logger.error(f'Error setting initial voice state: {config_e}')
-                # Default to legacy behavior if config import fails
-                self.muted = False  # Enable microphone by default
-                self.deafened = False  # Enable sound by default
+                # Default to enabling everything
+                self.muted = False
+                self.deafened = False
                 await self.voice_client.set_mute(self.muted)
                 await self.voice_client.set_deaf(self.deafened)
-        
+                # Always try to start audio stream in default case
+                await asyncio.sleep(3)
+                await self.start_audio_stream()
+                
         except Exception as e:
             self.logger.error(f'Error connecting to voice channel: {e}')
             self.logger.error(f'Traceback: {traceback.format_exc()}')
     
+    async def start_audio_stream(self):
+        """Starts audio streaming from microphone to Discord"""
+        if not self.connected or not self.voice_client:
+            self.logger.warning("Cannot start audio stream: not connected to voice channel")
+            return False
+            
+        try:
+            # Use direct ALSA input for the mic
+            # Format: 'alsa:hw:CARD,DEVICE'
+            source = discord.PCMAudio(source='alsa:hw:2,0')
+            
+            self.logger.info("Starting audio stream from microphone...")
+            
+            # Play audio from mic to Discord
+            self.voice_client.play(source, after=lambda e: 
+                self.logger.error(f"Audio stream stopped: {e}") if e else 
+                self.logger.info("Audio stream ended normally")
+            )
+            
+            self.audio_streaming = True
+            self.logger.info("Audio stream started successfully")
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to start audio stream: {e}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+    
+    async def stop_audio_stream(self):
+        """Stops the audio stream"""
+        if not self.audio_streaming:
+            return
+            
+        try:
+            if self.voice_client and self.voice_client.is_playing():
+                self.voice_client.stop()
+                self.logger.info("Audio stream stopped")
+            self.audio_streaming = False
+        except Exception as e:
+            self.logger.error(f"Error stopping audio stream: {e}")
+            
     def start(self):
         """Starts Discord client in a separate thread"""
         def run_client():
@@ -148,6 +194,9 @@ class DiscordVoiceClient:
             
             # Create asynchronous function that will disconnect from voice and close client
             async def shutdown():
+                # Stop audio streaming if active
+                await self.stop_audio_stream()
+                
                 if self.voice_client:
                     self.logger.info("Disconnecting from voice channel...")
                     try:
@@ -185,6 +234,13 @@ class DiscordVoiceClient:
             self.logger.info(f"Toggling microphone from {self.muted} to {not self.muted}")
             self.muted = not self.muted
             await self.voice_client.set_mute(self.muted)
+            
+            # When unmuting, start audio stream; when muting, stop it
+            if not self.muted and not self.audio_streaming:
+                await self.start_audio_stream()
+            elif self.muted and self.audio_streaming:
+                await self.stop_audio_stream()
+                
             self.logger.info(f'Microphone {"disabled" if self.muted else "enabled"}')
             return True
         except Exception as e:
@@ -264,7 +320,8 @@ class DiscordVoiceClient:
         state = {
             "connected": self.connected,
             "muted": self.muted,
-            "deafened": self.deafened
+            "deafened": self.deafened,
+            "audio_streaming": self.audio_streaming
         }
         self.logger.info(f"Current Discord voice status: {state}")
         return state 

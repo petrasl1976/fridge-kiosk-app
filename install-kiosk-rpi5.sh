@@ -106,13 +106,19 @@ setup_python_env() {
         pytz \
         tzlocal \
         python-dotenv \
-        discord \
-        "discord.py[voice]" \
-        PyNaCl
+        py-cord \
+        PyNaCl \
+        pyaudio
+        
+    # Uninstall discord.py if it exists to avoid conflicts
+    sudo -u kiosk "$app_dir/venv/bin/pip" uninstall -y discord.py discord
+    
+    # Install py-cord with voice support
+    sudo -u kiosk "$app_dir/venv/bin/pip" install --no-cache-dir "py-cord[voice]"
 }
 
 echo "Checking and installing required packages..."
-PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr"
+PACKAGES="chromium-browser cage dbus-x11 seatd python3-venv python3-pip wlr-randr ffmpeg alsa-utils pulseaudio"
 NEW_PACKAGES=""
 
 for pkg in $PACKAGES; do
@@ -194,6 +200,7 @@ fi
 chmod 600 "$KIOSK_APP_DIR/config.py"
 chmod 600 "$KIOSK_APP_DIR/.env"
 chmod +x "$KIOSK_APP_DIR/app.py"
+chmod +x "$KIOSK_APP_DIR/audio_test.py"
 chmod 666 "$KIOSK_APP_DIR/albums_cache.json"
 chmod 666 "$KIOSK_APP_DIR/log.log"
 
